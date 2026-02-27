@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { Material } from '@/types';
 import {

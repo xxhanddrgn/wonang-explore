@@ -1,4 +1,4 @@
-﻿import { Course, Note, Material } from '@/types';
+import { Course, Note, Material } from '@/types';
 
 const COURSES_KEY = 'lecture-notes-courses';
 const NOTES_KEY = 'lecture-notes-notes';
