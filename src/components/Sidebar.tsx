@@ -9,6 +9,7 @@ import {
   Trash2,
   X,
   PenLine,
+  FolderOpen,
 } from 'lucide-react';
 
 const COLORS = [
@@ -19,19 +20,25 @@ const COLORS = [
 interface SidebarProps {
   courses: Course[];
   selectedCourseId: string | null;
+  showAllMaterials: boolean;
   onSelectCourse: (id: string) => void;
+  onShowAllMaterials: () => void;
   onAddCourse: (course: Omit<Course, 'id' | 'createdAt'>) => void;
   onDeleteCourse: (id: string) => void;
   onRenameCourse: (id: string, name: string) => void;
+  materialCount: number;
 }
 
 export default function Sidebar({
   courses,
   selectedCourseId,
+  showAllMaterials,
   onSelectCourse,
+  onShowAllMaterials,
   onAddCourse,
   onDeleteCourse,
   onRenameCourse,
+  materialCount,
 }: SidebarProps) {
   const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState('');
@@ -141,6 +148,7 @@ export default function Sidebar({
 
   return (
     <aside className="w-72 bg-slate-800 h-screen flex flex-col shrink-0">
+      {/* Header */}
       <div className="px-5 py-5 border-b border-slate-700">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-indigo-500 rounded-lg flex items-center justify-center">
@@ -155,6 +163,7 @@ export default function Sidebar({
         </div>
       </div>
 
+      {/* Add Button */}
       <div className="px-4 py-3">
         <button
           onClick={() => setShowForm(!showForm)}
@@ -165,6 +174,7 @@ export default function Sidebar({
         </button>
       </div>
 
+      {/* Add Form */}
       {showForm && (
         <div className="px-4 pb-3 space-y-2">
           <input
@@ -220,6 +230,27 @@ export default function Sidebar({
         </div>
       )}
 
+      {/* My Materials Button */}
+      <div className="px-3 pb-2">
+        <button
+          onClick={onShowAllMaterials}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
+            showAllMaterials
+              ? 'bg-white/15 text-white'
+              : 'text-slate-300 hover:bg-white/10 hover:text-white'
+          }`}
+        >
+          <FolderOpen size={16} />
+          <span className="flex-1 text-sm font-medium">내 자료</span>
+          {materialCount > 0 && (
+            <span className="text-xs bg-white/10 text-slate-300 px-1.5 py-0.5 rounded-full">
+              {materialCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Course List */}
       <nav className="flex-1 overflow-y-auto sidebar-scroll px-3 pb-4">
         {coursesFiltered.length > 0 && (
           <div className="mb-3">

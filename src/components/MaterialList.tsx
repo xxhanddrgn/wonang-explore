@@ -74,8 +74,10 @@ export default function MaterialList({
             key={material.id}
             className="group border border-gray-100 rounded-xl p-4 hover:border-indigo-200 hover:shadow-sm transition-all bg-white"
           >
+            {/* Preview for images */}
             {isImage && (
               <div className="mb-3 rounded-lg overflow-hidden bg-gray-50 h-32 flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={material.url}
                   alt={material.fileName}
@@ -106,6 +108,7 @@ export default function MaterialList({
               </div>
             </div>
 
+            {/* Actions */}
             <div className="flex gap-1.5 mt-3 pt-3 border-t border-gray-50">
               <a
                 href={material.url}

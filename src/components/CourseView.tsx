@@ -112,6 +112,7 @@ export default function CourseView({
 
   return (
     <div className="flex-1 flex flex-col h-screen overflow-hidden">
+      {/* Course Header */}
       <div className="bg-white border-b border-gray-100 px-6 py-4">
         <div className="flex items-center gap-3">
           {viewMode === 'editor' && (
@@ -134,6 +135,7 @@ export default function CourseView({
           </div>
         </div>
 
+        {/* Tabs (show only in list mode) */}
         {viewMode === 'list' && (
           <div className="flex gap-1 mt-4">
             <button
@@ -168,12 +170,14 @@ export default function CourseView({
         )}
       </div>
 
+      {/* Content */}
       {viewMode === 'editor' && selectedNote ? (
         <NoteEditor note={selectedNote} onSave={onSaveNote} />
       ) : (
         <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
           {activeTab === 'notes' ? (
             <div className="space-y-4">
+              {/* New Note Button */}
               <button
                 onClick={handleNewNote}
                 className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-indigo-200 rounded-xl text-indigo-500 hover:bg-indigo-50 hover:border-indigo-300 transition-colors text-sm font-medium"
@@ -181,6 +185,7 @@ export default function CourseView({
                 <Plus size={18} />새 필기 시작
               </button>
 
+              {/* Notes List */}
               {sortedNotes.length === 0 ? (
                 <div className="text-center py-12 text-gray-400">
                   <PenLine size={48} className="mx-auto mb-3 opacity-30" />

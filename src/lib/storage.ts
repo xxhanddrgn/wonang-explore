@@ -50,6 +50,7 @@ export function updateCourse(id: string, updates: Partial<Course>): Course[] {
 export function deleteCourse(id: string): Course[] {
   const courses = getCourses().filter((c) => c.id !== id);
   saveCourses(courses);
+  // Also delete related notes and materials from storage
   const notes = getNotes().filter((n) => n.courseId !== id);
   setItem(NOTES_KEY, notes);
   const materials = getMaterials().filter((m) => m.courseId !== id);

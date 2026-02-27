@@ -62,6 +62,7 @@ export default function NoteEditor({ note, onSave }: NoteEditorProps) {
     },
   });
 
+  // Update editor content when note changes
   useEffect(() => {
     if (editor && note.content !== editor.getHTML()) {
       editor.commands.setContent(note.content);
@@ -70,6 +71,7 @@ export default function NoteEditor({ note, onSave }: NoteEditorProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note.id]);
 
+  // Auto-save
   const doSave = useCallback(() => {
     if (!editor) return;
     setSaveStatus('saving');
@@ -84,6 +86,7 @@ export default function NoteEditor({ note, onSave }: NoteEditorProps) {
     setTimeout(() => setSaveStatus('idle'), 2000);
   }, [editor, note, title, onSave]);
 
+  // Auto-save on content change with debounce
   useEffect(() => {
     if (!editor) return;
     let timeout: NodeJS.Timeout;
@@ -100,6 +103,7 @@ export default function NoteEditor({ note, onSave }: NoteEditorProps) {
     };
   }, [editor, doSave]);
 
+  // Ctrl+S
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -142,6 +146,7 @@ export default function NoteEditor({ note, onSave }: NoteEditorProps) {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Title */}
       <input
         type="text"
         value={title}
@@ -151,6 +156,7 @@ export default function NoteEditor({ note, onSave }: NoteEditorProps) {
         className="text-2xl font-bold px-6 pt-5 pb-2 outline-none bg-transparent placeholder:text-gray-300"
       />
 
+      {/* Toolbar */}
       <div className="flex items-center gap-0.5 px-5 py-2 border-y border-gray-100 flex-wrap sticky top-0 bg-white z-10">
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
@@ -303,6 +309,7 @@ export default function NoteEditor({ note, onSave }: NoteEditorProps) {
         </div>
       </div>
 
+      {/* Editor Content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-4">
         <EditorContent editor={editor} />
       </div>
