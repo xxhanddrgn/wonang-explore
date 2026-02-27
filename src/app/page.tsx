@@ -10,6 +10,7 @@ import {
   getNotesByCourse,
   saveNote as saveNoteToStorage,
   deleteNote as deleteNoteFromStorage,
+  getMaterials,
   getMaterialsByCourse,
   addMaterial as addMaterialToStorage,
   deleteMaterial as deleteMaterialFromStorage,
@@ -17,6 +18,7 @@ import {
 } from '@/lib/storage';
 import Sidebar from '@/components/Sidebar';
 import CourseView from '@/components/CourseView';
+import AllMaterialsView from '@/components/AllMaterialsView';
 import { GraduationCap, BookOpen, PenLine, Cloud } from 'lucide-react';
 
 export default function Home() {
@@ -24,13 +26,20 @@ export default function Home() {
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [allMaterials, setAllMaterials] = useState<Material[]>([]);
+  const [showAllMaterials, setShowAllMaterials] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  const refreshAllMaterials = useCallback(() => {
+    setAllMaterials(getMaterials());
+  }, []);
 
   // Load courses on mount
   useEffect(() => {
     setCourses(getCourses());
+    refreshAllMaterials();
     setMounted(true);
-  }, []);
+  }, [refreshAllMaterials]);
 
   // Load notes and materials when course changes
   useEffect(() => {
@@ -41,6 +50,19 @@ export default function Home() {
   }, [selectedCourseId]);
 
   const selectedCourse = courses.find((c) => c.id === selectedCourseId);
+
+  const handleSelectCourse = useCallback((id: string) => {
+    setSelectedCourseId(id);
+    setShowAllMaterials(false);
+  }, []);
+
+  const handleShowAllMaterials = useCallback(() => {
+    setShowAllMaterials(true);
+    setSelectedCourseId(null);
+    setNotes([]);
+    setMaterials([]);
+    refreshAllMaterials();
+  }, [refreshAllMaterials]);
 
   const handleAddCourse = useCallback(
     (data: Omit<Course, 'id' | 'createdAt'>) => {
@@ -101,8 +123,9 @@ export default function Home() {
       if (selectedCourseId) {
         setMaterials(getMaterialsByCourse(selectedCourseId));
       }
+      refreshAllMaterials();
     },
-    [selectedCourseId]
+    [selectedCourseId, refreshAllMaterials]
   );
 
   const handleDeleteMaterial = useCallback(
@@ -124,8 +147,9 @@ export default function Home() {
       if (selectedCourseId) {
         setMaterials(getMaterialsByCourse(selectedCourseId));
       }
+      refreshAllMaterials();
     },
-    [selectedCourseId]
+    [selectedCourseId, refreshAllMaterials]
   );
 
   if (!mounted) {
@@ -141,14 +165,23 @@ export default function Home() {
       <Sidebar
         courses={courses}
         selectedCourseId={selectedCourseId}
-        onSelectCourse={setSelectedCourseId}
+        showAllMaterials={showAllMaterials}
+        onSelectCourse={handleSelectCourse}
+        onShowAllMaterials={handleShowAllMaterials}
         onAddCourse={handleAddCourse}
         onDeleteCourse={handleDeleteCourse}
         onRenameCourse={handleRenameCourse}
+        materialCount={allMaterials.length}
       />
 
       {/* Main Content */}
-      {selectedCourse ? (
+      {showAllMaterials ? (
+        <AllMaterialsView
+          courses={courses}
+          materials={allMaterials}
+          onDeleteMaterial={handleDeleteMaterial}
+        />
+      ) : selectedCourse ? (
         <CourseView
           key={selectedCourse.id}
           course={selectedCourse}

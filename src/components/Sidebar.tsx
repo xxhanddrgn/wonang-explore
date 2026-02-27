@@ -9,6 +9,7 @@ import {
   Trash2,
   X,
   PenLine,
+  FolderOpen,
 } from 'lucide-react';
 
 const COLORS = [
@@ -19,19 +20,25 @@ const COLORS = [
 interface SidebarProps {
   courses: Course[];
   selectedCourseId: string | null;
+  showAllMaterials: boolean;
   onSelectCourse: (id: string) => void;
+  onShowAllMaterials: () => void;
   onAddCourse: (course: Omit<Course, 'id' | 'createdAt'>) => void;
   onDeleteCourse: (id: string) => void;
   onRenameCourse: (id: string, name: string) => void;
+  materialCount: number;
 }
 
 export default function Sidebar({
   courses,
   selectedCourseId,
+  showAllMaterials,
   onSelectCourse,
+  onShowAllMaterials,
   onAddCourse,
   onDeleteCourse,
   onRenameCourse,
+  materialCount,
 }: SidebarProps) {
   const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState('');
@@ -222,6 +229,26 @@ export default function Sidebar({
           </button>
         </div>
       )}
+
+      {/* My Materials Button */}
+      <div className="px-3 pb-2">
+        <button
+          onClick={onShowAllMaterials}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
+            showAllMaterials
+              ? 'bg-white/15 text-white'
+              : 'text-slate-300 hover:bg-white/10 hover:text-white'
+          }`}
+        >
+          <FolderOpen size={16} />
+          <span className="flex-1 text-sm font-medium">내 자료</span>
+          {materialCount > 0 && (
+            <span className="text-xs bg-white/10 text-slate-300 px-1.5 py-0.5 rounded-full">
+              {materialCount}
+            </span>
+          )}
+        </button>
+      </div>
 
       {/* Course List */}
       <nav className="flex-1 overflow-y-auto sidebar-scroll px-3 pb-4">
