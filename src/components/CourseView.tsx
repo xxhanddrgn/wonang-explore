@@ -13,7 +13,7 @@ import {
 import NoteEditor from './NoteEditor';
 import FileUploader from './FileUploader';
 import MaterialList from './MaterialList';
-import { uploadToCloudinary } from '@/lib/cloudinary';
+import { uploadToNas } from '@/lib/nas';
 import { generateId } from '@/lib/storage';
 
 interface CourseViewProps {
@@ -94,7 +94,7 @@ export default function CourseView({
 
   const handleFileUpload = useCallback(
     async (file: File) => {
-      const result = await uploadToCloudinary(file);
+      const result = await uploadToNas(file);
       const material: Material = {
         id: generateId(),
         courseId: course.id,

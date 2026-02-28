@@ -19,7 +19,7 @@ import {
 import Sidebar from '@/components/Sidebar';
 import CourseView from '@/components/CourseView';
 import AllMaterialsView from '@/components/AllMaterialsView';
-import { GraduationCap, BookOpen, PenLine, Cloud } from 'lucide-react';
+import { GraduationCap, BookOpen, PenLine, HardDrive } from 'lucide-react';
 
 export default function Home() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -132,15 +132,15 @@ export default function Home() {
     async (material: Material) => {
       if (!confirm('이 자료를 삭제하시겠습니까?')) return;
 
-      // Try to delete from Cloudinary
+      // Try to delete from NAS
       try {
-        await fetch('/api/cloudinary/delete', {
+        await fetch('/api/nas/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ publicId: material.publicId }),
         });
       } catch {
-        // Continue even if Cloudinary delete fails
+        // Continue even if NAS delete fails
       }
 
       deleteMaterialFromStorage(material.id);
@@ -222,9 +222,9 @@ export default function Home() {
               </div>
               <div className="space-y-2">
                 <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center mx-auto">
-                  <Cloud size={22} className="text-emerald-500" />
+                  <HardDrive size={22} className="text-emerald-500" />
                 </div>
-                <p className="text-xs text-gray-500">자료 업로드</p>
+                <p className="text-xs text-gray-500">NAS 자료 업로드</p>
               </div>
             </div>
 
