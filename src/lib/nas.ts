@@ -3,20 +3,42 @@
  * Synology NAS File Station API를 서버 API 라우트를 통해 사용
  *
  * 업로드 전략:
- * - 4MB 이하: Vercel API 경유 (간단, 안정적)
- * - 4MB 초과: 브라우저에서 NAS로 직접 업로드 (Vercel 크기 제한 우회)
+ * - 3MB 이하: Vercel API 경유 (간단, 안정적)
+ * - 3MB 초과: 청크 분할 업로드 (3MB 조각으로 나눠 서버 경유)
  */
 
-const VERCEL_LIMIT = 4 * 1024 * 1024; // 4MB
+const CHUNK_SIZE = 3 * 1024 * 1024; // 3MB
+
+/**
+ * 서버 응답에서 에러 메시지 추출
+ */
+async function extractErrorMessage(
+  res: Response,
+  fallback: string
+): Promise<string> {
+  try {
+    const data = await res.json();
+    if (data?.error && typeof data.error === 'string') return data.error;
+  } catch {
+    // JSON 파싱 실패 (Vercel 타임아웃 등 HTML 응답)
+  }
+
+  if (res.status === 504) return '서버 처리 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.';
+  if (res.status === 413) return '파일 크기가 서버 제한(4.5MB)을 초과했습니다.';
+  if (res.status === 502) return '서버에 일시적인 문제가 발생했습니다.';
+  if (res.status >= 500) return `서버 오류가 발생했습니다. (HTTP ${res.status})`;
+
+  return fallback;
+}
 
 export async function uploadToNas(file: File): Promise<{
   url: string;
   publicId: string;
 }> {
-  if (file.size <= VERCEL_LIMIT) {
+  if (file.size <= CHUNK_SIZE) {
     return uploadViaApi(file);
   }
-  return uploadDirect(file);
+  return uploadChunked(file);
 }
 
 /**
@@ -30,16 +52,19 @@ async function uploadViaApi(file: File): Promise<{
   formData.append('file', file);
   formData.append('fileName', file.name);
 
-  const res = await fetch('/api/nas/upload', {
-    method: 'POST',
-    body: formData,
-  });
+  let res: Response;
+  try {
+    res = await fetch('/api/nas/upload', {
+      method: 'POST',
+      body: formData,
+    });
+  } catch {
+    throw new Error('서버에 연결할 수 없습니다. 네트워크 연결을 확인해주세요.');
+  }
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({}));
-    throw new Error(
-      (error as { error?: string }).error || '파일 업로드에 실패했습니다.'
-    );
+    const msg = await extractErrorMessage(res, '파일 업로드에 실패했습니다.');
+    throw new Error(msg);
   }
 
   const data = await res.json();
@@ -47,74 +72,71 @@ async function uploadViaApi(file: File): Promise<{
 }
 
 /**
- * 직접 업로드: 브라우저에서 NAS로 직접 전송 (큰 파일용)
- * Vercel 4.5MB 제한을 우회
+ * 청크 업로드: 큰 파일을 3MB 조각으로 나눠 서버 API를 통해 업로드
+ * Vercel 4.5MB 제한을 우회하면서 CORS 문제 없음
  */
-async function uploadDirect(file: File): Promise<{
+async function uploadChunked(file: File): Promise<{
   url: string;
   publicId: string;
 }> {
-  // 1. 서버에서 NAS 세션 가져오기
-  const sessionRes = await fetch('/api/nas/session');
-  if (!sessionRes.ok) {
-    throw new Error('NAS 세션 생성에 실패했습니다.');
-  }
-  const session = await sessionRes.json();
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const uploadId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-  // 2. 파일명 생성
-  const timestamp = Date.now();
-  const safeName = file.name.replace(/[^a-zA-Z0-9가-힣._-]/g, '_');
-  const uploadFileName = `${timestamp}_${safeName}`;
+  // 1. 각 청크를 순서대로 업로드
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(start + CHUNK_SIZE, file.size);
+    const chunk = file.slice(start, end);
 
-  // 3. NAS에 직접 업로드 (no-cors: 응답은 못 읽지만 업로드는 됨)
-  const formData = new FormData();
-  formData.append('api', 'SYNO.FileStation.Upload');
-  formData.append('version', '2');
-  formData.append('method', 'upload');
-  formData.append('path', session.uploadPath);
-  formData.append('create_parents', 'true');
-  formData.append('overwrite', 'true');
-  formData.append('_sid', session.sid);
-  formData.append('file', file, uploadFileName);
+    const formData = new FormData();
+    formData.append('chunk', chunk);
+    formData.append('uploadId', uploadId);
+    formData.append('chunkIndex', String(i));
 
-  try {
-    await fetch(`${session.nasUrl}/webapi/entry.cgi`, {
-      method: 'POST',
-      body: formData,
-      mode: 'no-cors',
-    });
-  } catch {
-    throw new Error(
-      'NAS에 직접 연결할 수 없습니다. 네트워크를 확인해주세요.'
-    );
-  }
-
-  // 4. 업로드 확인 (no-cors에서는 응답을 못 읽으므로 서버에서 확인)
-  await new Promise((resolve) => setTimeout(resolve, 2000));
-
-  const verifyRes = await fetch(
-    `/api/nas/verify?fileName=${encodeURIComponent(uploadFileName)}`
-  );
-  const verify = await verifyRes.json();
-
-  if (!verify.exists) {
-    // 대용량 파일은 처리 시간이 더 걸릴 수 있음
-    await new Promise((resolve) => setTimeout(resolve, 4000));
-    const retryRes = await fetch(
-      `/api/nas/verify?fileName=${encodeURIComponent(uploadFileName)}`
-    );
-    const retry = await retryRes.json();
-
-    if (!retry.exists) {
+    let res: Response;
+    try {
+      res = await fetch('/api/nas/upload-chunk', {
+        method: 'POST',
+        body: formData,
+      });
+    } catch {
       throw new Error(
-        '파일 업로드를 확인할 수 없습니다. 네트워크 연결을 확인하고 다시 시도해주세요.'
+        `청크 ${i + 1}/${totalChunks} 전송 실패. 네트워크 연결을 확인해주세요.`
       );
     }
 
-    return { url: retry.url, publicId: uploadFileName };
+    if (!res.ok) {
+      const msg = await extractErrorMessage(
+        res,
+        `청크 업로드 실패 (${i + 1}/${totalChunks})`
+      );
+      throw new Error(msg);
+    }
   }
 
-  return { url: verify.url, publicId: uploadFileName };
+  // 2. 서버에서 청크 병합
+  let mergeRes: Response;
+  try {
+    mergeRes = await fetch('/api/nas/upload-merge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uploadId,
+        totalChunks,
+        fileName: file.name,
+      }),
+    });
+  } catch {
+    throw new Error('파일 병합 요청 실패. 네트워크 연결을 확인해주세요.');
+  }
+
+  if (!mergeRes.ok) {
+    const msg = await extractErrorMessage(mergeRes, '파일 병합에 실패했습니다.');
+    throw new Error(msg);
+  }
+
+  const result = await mergeRes.json();
+  return { url: result.url, publicId: result.publicId };
 }
 
 export async function deleteFromNas(publicId: string): Promise<void> {
@@ -125,9 +147,7 @@ export async function deleteFromNas(publicId: string): Promise<void> {
   });
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({}));
-    throw new Error(
-      (error as { error?: string }).error || '파일 삭제에 실패했습니다.'
-    );
+    const msg = await extractErrorMessage(res, '파일 삭제에 실패했습니다.');
+    throw new Error(msg);
   }
 }

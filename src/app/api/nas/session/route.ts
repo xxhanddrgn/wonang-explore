@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   NAS_UPLOAD_PATH,
+  NAS_EXTERNAL_URL,
   isNasConfigured,
   nasLogin,
 } from '@/lib/nas-auth';
@@ -12,7 +13,10 @@ import {
 export async function GET() {
   if (!isNasConfigured()) {
     return NextResponse.json(
-      { error: 'NAS 환경변수가 설정되지 않았습니다.' },
+      {
+        error:
+          'NAS 환경변수가 설정되지 않았습니다. Vercel에 NAS_ACCOUNT, NAS_EXTERNAL_URL 등을 추가하세요.',
+      },
       { status: 500 }
     );
   }
@@ -20,8 +24,11 @@ export async function GET() {
   try {
     const { sid, nasUrl } = await nasLogin();
 
+    // 브라우저가 사용할 URL: 외부 HTTPS URL 우선, 없으면 서버 접속 URL 사용
+    const browserNasUrl = NAS_EXTERNAL_URL || nasUrl;
+
     return NextResponse.json({
-      nasUrl,
+      nasUrl: browserNasUrl,
       sid,
       uploadPath: NAS_UPLOAD_PATH,
     });
