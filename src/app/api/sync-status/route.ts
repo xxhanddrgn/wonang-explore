@@ -102,13 +102,12 @@ export async function GET() {
     uploadForm.append('_sid', sid);
     uploadForm.append('file', blob, '_sync_test.json');
 
-    // Synology DSM 7: _sid를 URL 쿼리 + FormData 양쪽 모두 전달 필수
+    // Synology DSM 7: Upload API는 URL 경로에 API 이름 필수
     const uploadRes = await fetch(
-      `${nasUrl}/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=${sid}`,
+      `${nasUrl}/webapi/entry.cgi/SYNO.FileStation.Upload?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=${sid}`,
       {
         method: 'POST',
         body: uploadForm,
-        headers: { Cookie: `id=${sid}` },
       }
     );
 
