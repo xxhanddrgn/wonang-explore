@@ -86,25 +86,46 @@ export async function GET() {
     results.uploadPathCheck = { error: String(e) };
   }
 
-  // Step 4: Also try with /volume1/ prefix
-  try {
-    const altPath = `/volume1${NAS_UPLOAD_PATH}`;
-    const params = new URLSearchParams({
-      api: 'SYNO.FileStation.List',
-      version: '2',
-      method: 'list',
-      folder_path: altPath,
-      _sid: sid,
-    });
-    const res = await fetch(`${NAS_URL}/webapi/entry.cgi?${params}`);
-    const data = await res.json();
-    results.uploadPathWithVolume = {
-      path: altPath,
-      exists: data.success,
-      error: data.success ? undefined : data.error,
-    };
-  } catch (e) {
-    results.uploadPathWithVolume = { error: String(e) };
+  // Step 4: If upload path doesn't exist, try to create it
+  if (!results.uploadPathCheck || !(results.uploadPathCheck as { exists: boolean }).exists) {
+    try {
+      const parentPath = NAS_UPLOAD_PATH.substring(0, NAS_UPLOAD_PATH.lastIndexOf('/'));
+      const folderName = NAS_UPLOAD_PATH.substring(NAS_UPLOAD_PATH.lastIndexOf('/') + 1);
+
+      const params = new URLSearchParams({
+        api: 'SYNO.FileStation.CreateFolder',
+        version: '2',
+        method: 'create',
+        folder_path: `["${parentPath}"]`,
+        name: `["${folderName}"]`,
+        force_parent: 'true',
+        _sid: sid,
+      });
+
+      const res = await fetch(`${NAS_URL}/webapi/entry.cgi?${params}`);
+      const data = await res.json();
+      results.folderCreation = data.success
+        ? { success: true, message: '업로드 폴더 생성 완료!' }
+        : { success: false, error: data.error };
+
+      // Re-check if folder now exists
+      if (data.success) {
+        const checkParams = new URLSearchParams({
+          api: 'SYNO.FileStation.List',
+          version: '2',
+          method: 'list',
+          folder_path: NAS_UPLOAD_PATH,
+          _sid: sid,
+        });
+        const checkRes = await fetch(`${NAS_URL}/webapi/entry.cgi?${checkParams}`);
+        const checkData = await checkRes.json();
+        results.uploadPathCheck = checkData.success
+          ? { exists: true, fileCount: checkData.data?.files?.length ?? 0 }
+          : { exists: false, error: checkData.error };
+      }
+    } catch (e) {
+      results.folderCreation = { error: String(e) };
+    }
   }
 
   // Logout
