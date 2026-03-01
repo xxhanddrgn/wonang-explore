@@ -87,14 +87,60 @@ export async function GET() {
     };
   }
 
-  // 4. 결론
+  // 4. 업로드(쓰기) 테스트
+  try {
+    const testContent = JSON.stringify({ test: true, timestamp: new Date().toISOString() });
+    const blob = new Blob([testContent], { type: 'application/json' });
+
+    const uploadForm = new FormData();
+    uploadForm.append('api', 'SYNO.FileStation.Upload');
+    uploadForm.append('version', '2');
+    uploadForm.append('method', 'upload');
+    uploadForm.append('path', NAS_UPLOAD_PATH);
+    uploadForm.append('create_parents', 'true');
+    uploadForm.append('overwrite', 'true');
+    uploadForm.append('_sid', sid);
+    uploadForm.append('file', blob, '_sync_test.json');
+
+    const uploadRes = await fetch(`${nasUrl}/webapi/entry.cgi?_sid=${sid}`, {
+      method: 'POST',
+      body: uploadForm,
+      headers: { Cookie: `id=${sid}` },
+    });
+
+    const uploadText = await uploadRes.text();
+    try {
+      const uploadData = JSON.parse(uploadText);
+      status.uploadTest = {
+        success: uploadData.success,
+        error: uploadData.error || null,
+        httpStatus: uploadRes.status,
+      };
+    } catch {
+      status.uploadTest = {
+        success: false,
+        httpStatus: uploadRes.status,
+        rawResponse: uploadText.substring(0, 500),
+      };
+    }
+  } catch (error) {
+    status.uploadTest = {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  // 5. 결론
   const loginOk = (status.loginTest as { success: boolean }).success;
+  const uploadOk = (status.uploadTest as { success: boolean })?.success;
   const metaExists = (status.metadataTest as { exists?: boolean })?.exists;
 
-  if (loginOk && metaExists) {
-    status.result = 'OK: NAS 연결 정상, 메타데이터 동기화 가능';
-  } else if (loginOk && !metaExists) {
-    status.result = 'PARTIAL: NAS 연결 정상, 메타데이터 파일 미존재 (첫 저장 시 생성됨)';
+  if (loginOk && uploadOk && metaExists) {
+    status.result = 'OK: NAS 연결 정상, 읽기/쓰기 모두 가능';
+  } else if (loginOk && uploadOk && !metaExists) {
+    status.result = 'OK: NAS 연결 정상, 쓰기 가능 (메타데이터는 첫 저장 시 생성됨)';
+  } else if (loginOk && !uploadOk) {
+    status.result = 'FAIL: NAS 로그인 성공, 하지만 파일 쓰기 실패 (권한 또는 경로 문제)';
   } else {
     status.result = 'FAIL: NAS 연결 실패';
   }
