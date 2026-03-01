@@ -18,7 +18,7 @@ export function isNasConfigured(): boolean {
 export async function nasLogin(otpCode?: string): Promise<string> {
   const params: Record<string, string> = {
     api: 'SYNO.API.Auth',
-    version: '7',
+    version: '6',
     method: 'login',
     account: NAS_ACCOUNT,
     passwd: NAS_PASSWORD,
@@ -40,7 +40,7 @@ export async function nasLogin(otpCode?: string): Promise<string> {
   }
 
   const searchParams = new URLSearchParams(params);
-  const res = await fetch(`${NAS_URL}/webapi/entry.cgi?${searchParams}`);
+  const res = await fetch(`${NAS_URL}/webapi/auth.cgi?${searchParams}`);
   const data = await res.json();
 
   if (!data.success) {
@@ -70,7 +70,7 @@ export async function nasLoginWithOtp(
 ): Promise<{ sid: string; deviceToken: string }> {
   const params = new URLSearchParams({
     api: 'SYNO.API.Auth',
-    version: '7',
+    version: '6',
     method: 'login',
     account: NAS_ACCOUNT,
     passwd: NAS_PASSWORD,
@@ -81,7 +81,7 @@ export async function nasLoginWithOtp(
     device_name: 'LectureNotesPlatform',
   });
 
-  const res = await fetch(`${NAS_URL}/webapi/entry.cgi?${params}`);
+  const res = await fetch(`${NAS_URL}/webapi/auth.cgi?${params}`);
   const data = await res.json();
 
   if (!data.success) {
@@ -101,11 +101,11 @@ export async function nasLoginWithOtp(
 export async function nasLogout(sid: string): Promise<void> {
   const params = new URLSearchParams({
     api: 'SYNO.API.Auth',
-    version: '7',
+    version: '6',
     method: 'logout',
     session: 'FileStation',
     _sid: sid,
   });
 
-  await fetch(`${NAS_URL}/webapi/entry.cgi?${params}`).catch(() => {});
+  await fetch(`${NAS_URL}/webapi/auth.cgi?${params}`).catch(() => {});
 }

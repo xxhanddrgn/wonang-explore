@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
     uploadForm.append('path', NAS_UPLOAD_PATH);
     uploadForm.append('create_parents', 'true');
     uploadForm.append('overwrite', 'true');
+    uploadForm.append('_sid', sid);
 
     // Convert File to Blob with the correct filename
     const fileBuffer = await file.arrayBuffer();
@@ -76,7 +77,11 @@ export async function POST(req: NextRequest) {
 
     const uploadRes = await fetch(
       `${NAS_URL}/webapi/entry.cgi?_sid=${sid}`,
-      { method: 'POST', body: uploadForm }
+      {
+        method: 'POST',
+        body: uploadForm,
+        headers: { Cookie: `id=${sid}` },
+      }
     );
 
     const uploadData = await uploadRes.json();
