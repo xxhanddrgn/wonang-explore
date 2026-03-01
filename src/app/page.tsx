@@ -15,6 +15,7 @@ import {
   addMaterial as addMaterialToStorage,
   deleteMaterial as deleteMaterialFromStorage,
   generateId,
+  loadFromServer,
 } from '@/lib/storage';
 import Sidebar from '@/components/Sidebar';
 import CourseView from '@/components/CourseView';
@@ -34,12 +35,14 @@ export default function Home() {
     setAllMaterials(getMaterials());
   }, []);
 
-  // Load courses on mount
+  // Load data from server on mount
   useEffect(() => {
-    setCourses(getCourses());
-    refreshAllMaterials();
-    setMounted(true);
-  }, [refreshAllMaterials]);
+    loadFromServer().then((data) => {
+      setCourses(data.courses);
+      setAllMaterials(data.materials);
+      setMounted(true);
+    });
+  }, []);
 
   // Load notes and materials when course changes
   useEffect(() => {
