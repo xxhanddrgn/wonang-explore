@@ -6,6 +6,8 @@ import {
   nasLogout,
 } from '@/lib/nas-auth';
 
+export const maxDuration = 60;
+
 /**
  * 청크 업로드: 큰 파일을 3MB 조각으로 나눠 NAS 임시 폴더에 저장
  */

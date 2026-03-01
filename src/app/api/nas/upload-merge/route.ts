@@ -38,10 +38,8 @@ export async function POST(req: NextRequest) {
 
     const tempPath = `${NAS_UPLOAD_PATH}/.temp`;
 
-    // 모든 청크를 순서대로 다운로드하여 합치기
-    const chunks: ArrayBuffer[] = [];
-
-    for (let i = 0; i < totalChunks; i++) {
+    // 모든 청크를 병렬로 다운로드하여 합치기
+    const chunkPromises = Array.from({ length: totalChunks }, (_, i) => {
       const chunkFileName = `${uploadId}_chunk_${i}`;
       const chunkFilePath = `${tempPath}/${chunkFileName}`;
 
@@ -54,15 +52,16 @@ export async function POST(req: NextRequest) {
         _sid: sid,
       });
 
-      const res = await fetch(`${nasUrl}/webapi/entry.cgi?${downloadParams}`);
+      return fetch(`${nasUrl}/webapi/entry.cgi?${downloadParams}`)
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`청크 ${i} 다운로드 실패 (HTTP ${res.status})`);
+          }
+          return res.arrayBuffer();
+        });
+    });
 
-      if (!res.ok) {
-        throw new Error(`청크 ${i} 다운로드 실패`);
-      }
-
-      const buffer = await res.arrayBuffer();
-      chunks.push(buffer);
-    }
+    const chunks = await Promise.all(chunkPromises);
 
     // 청크 합치기
     const totalSize = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
