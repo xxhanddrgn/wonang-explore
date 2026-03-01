@@ -128,8 +128,9 @@ export async function GET() {
     uploadForm.append('_sid', sid);
     uploadForm.append('file', blob, '_sync_test.json');
 
-    // API Info가 알려준 경로 사용 (예: entry.cgi 또는 FileStation/api_upload.cgi)
-    const uploadUrl = `${nasUrl}/webapi/${uploadPath}?_sid=${sid}`;
+    // API Info 경로 + URL path에 API 이름 포함 + 쿼리/FormData/Cookie 모두 전달
+    const ver = String(Math.min(uploadMaxVersion, 2));
+    const uploadUrl = `${nasUrl}/webapi/${uploadPath}/SYNO.FileStation.Upload?api=SYNO.FileStation.Upload&version=${ver}&method=upload&_sid=${sid}`;
     const uploadRes = await fetch(uploadUrl, {
       method: 'POST',
       body: uploadForm,
