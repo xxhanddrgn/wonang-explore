@@ -11,7 +11,7 @@ const NAS_PASSWORD = process.env.NAS_PASSWORD || '';
 const NAS_UPLOAD_PATH = process.env.NAS_UPLOAD_PATH || '/lecture-notes';
 const NAS_DEVICE_TOKEN = process.env.NAS_DEVICE_TOKEN || '';
 
-export { NAS_ACCOUNT, NAS_PASSWORD, NAS_UPLOAD_PATH };
+export { NAS_ACCOUNT, NAS_PASSWORD, NAS_UPLOAD_PATH, NAS_EXTERNAL_URL };
 
 // 활성 URL 캐시 (5분간 유지)
 let cachedNasUrl: string | null = null;

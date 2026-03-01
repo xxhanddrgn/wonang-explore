@@ -57,7 +57,10 @@ async function uploadDirect(file: File): Promise<{
   // 1. 서버에서 NAS 세션 가져오기
   const sessionRes = await fetch('/api/nas/session');
   if (!sessionRes.ok) {
-    throw new Error('NAS 세션 생성에 실패했습니다.');
+    const err = await sessionRes.json().catch(() => ({}));
+    throw new Error(
+      (err as { error?: string }).error || 'NAS 세션 생성에 실패했습니다.'
+    );
   }
   const session = await sessionRes.json();
 
