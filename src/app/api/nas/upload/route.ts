@@ -6,6 +6,8 @@ import {
   nasLogout,
 } from '@/lib/nas-auth';
 
+export const maxDuration = 60;
+
 async function ensureFolder(nasUrl: string, sid: string, folderPath: string): Promise<void> {
   const parentPath = folderPath.substring(0, folderPath.lastIndexOf('/'));
   const folderName = folderPath.substring(folderPath.lastIndexOf('/') + 1);

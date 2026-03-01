@@ -9,6 +9,28 @@
 
 const CHUNK_SIZE = 3 * 1024 * 1024; // 3MB
 
+/**
+ * 서버 응답에서 에러 메시지 추출
+ */
+async function extractErrorMessage(
+  res: Response,
+  fallback: string
+): Promise<string> {
+  try {
+    const data = await res.json();
+    if (data?.error && typeof data.error === 'string') return data.error;
+  } catch {
+    // JSON 파싱 실패 (Vercel 타임아웃 등 HTML 응답)
+  }
+
+  if (res.status === 504) return '서버 처리 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.';
+  if (res.status === 413) return '파일 크기가 서버 제한(4.5MB)을 초과했습니다.';
+  if (res.status === 502) return '서버에 일시적인 문제가 발생했습니다.';
+  if (res.status >= 500) return `서버 오류가 발생했습니다. (HTTP ${res.status})`;
+
+  return fallback;
+}
+
 export async function uploadToNas(file: File): Promise<{
   url: string;
   publicId: string;
@@ -30,16 +52,19 @@ async function uploadViaApi(file: File): Promise<{
   formData.append('file', file);
   formData.append('fileName', file.name);
 
-  const res = await fetch('/api/nas/upload', {
-    method: 'POST',
-    body: formData,
-  });
+  let res: Response;
+  try {
+    res = await fetch('/api/nas/upload', {
+      method: 'POST',
+      body: formData,
+    });
+  } catch {
+    throw new Error('서버에 연결할 수 없습니다. 네트워크 연결을 확인해주세요.');
+  }
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({}));
-    throw new Error(
-      (error as { error?: string }).error || '파일 업로드에 실패했습니다.'
-    );
+    const msg = await extractErrorMessage(res, '파일 업로드에 실패했습니다.');
+    throw new Error(msg);
   }
 
   const data = await res.json();
@@ -68,36 +93,46 @@ async function uploadChunked(file: File): Promise<{
     formData.append('uploadId', uploadId);
     formData.append('chunkIndex', String(i));
 
-    const res = await fetch('/api/nas/upload-chunk', {
-      method: 'POST',
-      body: formData,
-    });
+    let res: Response;
+    try {
+      res = await fetch('/api/nas/upload-chunk', {
+        method: 'POST',
+        body: formData,
+      });
+    } catch {
+      throw new Error(
+        `청크 ${i + 1}/${totalChunks} 전송 실패. 네트워크 연결을 확인해주세요.`
+      );
+    }
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        (err as { error?: string }).error ||
-          `업로드 실패 (${i + 1}/${totalChunks})`
+      const msg = await extractErrorMessage(
+        res,
+        `청크 업로드 실패 (${i + 1}/${totalChunks})`
       );
+      throw new Error(msg);
     }
   }
 
   // 2. 서버에서 청크 병합
-  const mergeRes = await fetch('/api/nas/upload-merge', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      uploadId,
-      totalChunks,
-      fileName: file.name,
-    }),
-  });
+  let mergeRes: Response;
+  try {
+    mergeRes = await fetch('/api/nas/upload-merge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uploadId,
+        totalChunks,
+        fileName: file.name,
+      }),
+    });
+  } catch {
+    throw new Error('파일 병합 요청 실패. 네트워크 연결을 확인해주세요.');
+  }
 
   if (!mergeRes.ok) {
-    const err = await mergeRes.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error || '파일 병합에 실패했습니다.'
-    );
+    const msg = await extractErrorMessage(mergeRes, '파일 병합에 실패했습니다.');
+    throw new Error(msg);
   }
 
   const result = await mergeRes.json();
@@ -112,9 +147,7 @@ export async function deleteFromNas(publicId: string): Promise<void> {
   });
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({}));
-    throw new Error(
-      (error as { error?: string }).error || '파일 삭제에 실패했습니다.'
-    );
+    const msg = await extractErrorMessage(res, '파일 삭제에 실패했습니다.');
+    throw new Error(msg);
   }
 }
