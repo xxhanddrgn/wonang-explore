@@ -30,6 +30,7 @@ export default function Home() {
   const [allMaterials, setAllMaterials] = useState<Material[]>([]);
   const [showAllMaterials, setShowAllMaterials] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [syncSource, setSyncSource] = useState<string>('pending');
 
   const refreshAllMaterials = useCallback(() => {
     setAllMaterials(getMaterials());
@@ -40,6 +41,7 @@ export default function Home() {
     loadFromServer().then((data) => {
       setCourses(data.courses);
       setAllMaterials(data.materials);
+      setSyncSource(data.syncSource || 'unknown');
       setMounted(true);
     });
   }, []);
@@ -175,6 +177,7 @@ export default function Home() {
         onDeleteCourse={handleDeleteCourse}
         onRenameCourse={handleRenameCourse}
         materialCount={allMaterials.length}
+        syncSource={syncSource}
       />
 
       {/* Main Content */}

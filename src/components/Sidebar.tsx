@@ -10,6 +10,8 @@ import {
   X,
   PenLine,
   FolderOpen,
+  Cloud,
+  CloudOff,
 } from 'lucide-react';
 
 const COLORS = [
@@ -27,6 +29,7 @@ interface SidebarProps {
   onDeleteCourse: (id: string) => void;
   onRenameCourse: (id: string, name: string) => void;
   materialCount: number;
+  syncSource?: string;
 }
 
 export default function Sidebar({
@@ -39,6 +42,7 @@ export default function Sidebar({
   onDeleteCourse,
   onRenameCourse,
   materialCount,
+  syncSource,
 }: SidebarProps) {
   const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState('');
@@ -284,6 +288,26 @@ export default function Sidebar({
           </div>
         )}
       </nav>
+
+      {/* Sync Status */}
+      <div className="px-4 py-3 border-t border-slate-700">
+        {syncSource === 'server' ? (
+          <div className="flex items-center gap-2 text-xs text-emerald-400">
+            <Cloud size={14} />
+            <span>NAS 동기화 완료</span>
+          </div>
+        ) : syncSource === 'local-offline' || syncSource === 'local-migrating' ? (
+          <div className="flex items-center gap-2 text-xs text-amber-400">
+            <CloudOff size={14} />
+            <span>{syncSource === 'local-offline' ? 'NAS 연결 실패 (로컬 저장소)' : '로컬 → NAS 업로드 중...'}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <Cloud size={14} />
+            <span>연결 확인 중...</span>
+          </div>
+        )}
+      </div>
     </aside>
   );
 }

@@ -4,6 +4,12 @@
  * 로컬/외부 네트워크 자동 감지
  */
 
+// Synology NAS는 자체 서명 SSL 인증서 사용 (포트 5001)
+// Vercel 서버에서 HTTPS 연결 시 인증서 검증을 비활성화
+if (typeof process !== 'undefined' && process.env) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
+
 const NAS_LOCAL_URL = process.env.NAS_URL || '';
 const NAS_EXTERNAL_URL = process.env.NAS_EXTERNAL_URL || '';
 const NAS_ACCOUNT = process.env.NAS_ACCOUNT || '';
@@ -23,8 +29,17 @@ export function isNasConfigured(): boolean {
 }
 
 /**
+ * Vercel(클라우드) 환경인지 감지
+ * Vercel에서는 로컬 NAS IP에 접근 불가 → 바로 외부 URL 사용
+ */
+function isCloudEnvironment(): boolean {
+  return !!(process.env.VERCEL || process.env.VERCEL_ENV || process.env.VERCEL_URL);
+}
+
+/**
  * 접속 가능한 NAS URL을 자동 감지
- * 로컬 URL을 먼저 시도 (빠름), 실패하면 외부 DDNS URL 사용
+ * - Vercel 환경: 외부 DDNS URL 직접 사용 (로컬 IP 접근 불가)
+ * - 로컬 환경: 로컬 URL 먼저 시도, 실패 시 외부 URL
  */
 export async function getActiveNasUrl(): Promise<string> {
   const now = Date.now();
@@ -34,7 +49,19 @@ export async function getActiveNasUrl(): Promise<string> {
     return cachedNasUrl;
   }
 
-  // 로컬 URL 시도 (2초 타임아웃)
+  // Vercel 클라우드 환경에서는 로컬 IP 시도 자체를 건너뜀
+  if (isCloudEnvironment()) {
+    if (NAS_EXTERNAL_URL) {
+      cachedNasUrl = NAS_EXTERNAL_URL;
+      lastUrlCheck = now;
+      console.log('[NAS] Vercel 환경 → 외부 DDNS URL 사용:', NAS_EXTERNAL_URL);
+      return NAS_EXTERNAL_URL;
+    }
+    console.error('[NAS] Vercel 환경인데 NAS_EXTERNAL_URL이 미설정!');
+    return NAS_LOCAL_URL;
+  }
+
+  // 로컬 환경: 로컬 URL 시도 (2초 타임아웃)
   if (NAS_LOCAL_URL) {
     try {
       const controller = new AbortController();
@@ -52,7 +79,6 @@ export async function getActiveNasUrl(): Promise<string> {
         return NAS_LOCAL_URL;
       }
     } catch {
-      // 로컬 접속 실패 → 외부 URL 시도
       console.log('[NAS] 로컬 네트워크 접속 실패, 외부 URL 시도...');
     }
   }
@@ -65,7 +91,6 @@ export async function getActiveNasUrl(): Promise<string> {
     return NAS_EXTERNAL_URL;
   }
 
-  // 둘 다 없으면 로컬 URL 반환 (에러는 호출측에서 처리)
   return NAS_LOCAL_URL;
 }
 
