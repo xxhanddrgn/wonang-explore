@@ -89,11 +89,13 @@ export async function POST(req: NextRequest) {
     const blob = new Blob([combined]);
     uploadForm.append('file', blob, finalFileName);
 
-    const uploadRes = await fetch(`${nasUrl}/webapi/entry.cgi?_sid=${sid}`, {
-      method: 'POST',
-      body: uploadForm,
-      headers: { Cookie: `id=${sid}` },
-    });
+    const uploadRes = await fetch(
+      `${nasUrl}/webapi/entry.cgi/SYNO.FileStation.Upload?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=${sid}`,
+      {
+        method: 'POST',
+        body: uploadForm,
+      }
+    );
 
     const uploadData = await uploadRes.json();
 
