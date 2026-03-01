@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  NAS_URL,
   NAS_UPLOAD_PATH,
   isNasConfigured,
   nasLogin,
@@ -16,6 +15,7 @@ export async function POST(req: NextRequest) {
   }
 
   let sid = '';
+  let nasUrl = '';
 
   try {
     const { publicId } = await req.json();
@@ -27,7 +27,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    sid = await nasLogin();
+    const login = await nasLogin();
+    sid = login.sid;
+    nasUrl = login.nasUrl;
 
     // Delete file from NAS
     const filePath = `${NAS_UPLOAD_PATH}/${publicId}`;
@@ -39,7 +41,7 @@ export async function POST(req: NextRequest) {
       _sid: sid,
     });
 
-    const res = await fetch(`${NAS_URL}/webapi/entry.cgi?${params}`);
+    const res = await fetch(`${nasUrl}/webapi/entry.cgi?${params}`);
     const data = await res.json();
 
     if (!data.success && data.error?.code !== 408) {
@@ -61,7 +63,7 @@ export async function POST(req: NextRequest) {
     );
   } finally {
     if (sid) {
-      await nasLogout(sid);
+      await nasLogout(sid, nasUrl);
     }
   }
 }

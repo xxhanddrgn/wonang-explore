@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { sid, deviceToken } = await nasLoginWithOtp(otpCode);
-    await nasLogout(sid);
+    const { sid, deviceToken, nasUrl } = await nasLoginWithOtp(otpCode);
+    await nasLogout(sid, nasUrl);
 
     if (!deviceToken) {
       return NextResponse.json({

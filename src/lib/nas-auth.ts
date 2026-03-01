@@ -1,21 +1,81 @@
 /**
  * Synology NAS 인증 모듈
  * 2단계 인증(OTP) 및 Device Token 지원
+ * 로컬/외부 네트워크 자동 감지
  */
 
-const NAS_URL = process.env.NAS_URL || '';
+const NAS_LOCAL_URL = process.env.NAS_URL || '';
+const NAS_EXTERNAL_URL = process.env.NAS_EXTERNAL_URL || '';
 const NAS_ACCOUNT = process.env.NAS_ACCOUNT || '';
 const NAS_PASSWORD = process.env.NAS_PASSWORD || '';
 const NAS_UPLOAD_PATH = process.env.NAS_UPLOAD_PATH || '/lecture-notes';
 const NAS_DEVICE_TOKEN = process.env.NAS_DEVICE_TOKEN || '';
 
-export { NAS_URL, NAS_ACCOUNT, NAS_PASSWORD, NAS_UPLOAD_PATH };
+export { NAS_ACCOUNT, NAS_PASSWORD, NAS_UPLOAD_PATH };
+
+// 활성 URL 캐시 (5분간 유지)
+let cachedNasUrl: string | null = null;
+let lastUrlCheck = 0;
+const URL_CHECK_INTERVAL = 5 * 60 * 1000;
 
 export function isNasConfigured(): boolean {
-  return !!(NAS_URL && NAS_ACCOUNT && NAS_PASSWORD);
+  return !!((NAS_LOCAL_URL || NAS_EXTERNAL_URL) && NAS_ACCOUNT && NAS_PASSWORD);
 }
 
-export async function nasLogin(otpCode?: string): Promise<string> {
+/**
+ * 접속 가능한 NAS URL을 자동 감지
+ * 로컬 URL을 먼저 시도 (빠름), 실패하면 외부 DDNS URL 사용
+ */
+export async function getActiveNasUrl(): Promise<string> {
+  const now = Date.now();
+
+  // 캐시된 URL이 있고 5분 이내면 재사용
+  if (cachedNasUrl && now - lastUrlCheck < URL_CHECK_INTERVAL) {
+    return cachedNasUrl;
+  }
+
+  // 로컬 URL 시도 (2초 타임아웃)
+  if (NAS_LOCAL_URL) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(
+        `${NAS_LOCAL_URL}/webapi/query.cgi?api=SYNO.API.Info&version=1&method=query&query=SYNO.API.Auth`,
+        { signal: controller.signal }
+      );
+      clearTimeout(timeout);
+
+      if (res.ok) {
+        cachedNasUrl = NAS_LOCAL_URL;
+        lastUrlCheck = now;
+        console.log('[NAS] 로컬 네트워크 접속 성공');
+        return NAS_LOCAL_URL;
+      }
+    } catch {
+      // 로컬 접속 실패 → 외부 URL 시도
+      console.log('[NAS] 로컬 네트워크 접속 실패, 외부 URL 시도...');
+    }
+  }
+
+  // 외부 DDNS URL 사용
+  if (NAS_EXTERNAL_URL) {
+    cachedNasUrl = NAS_EXTERNAL_URL;
+    lastUrlCheck = now;
+    console.log('[NAS] 외부 네트워크(DDNS)로 접속');
+    return NAS_EXTERNAL_URL;
+  }
+
+  // 둘 다 없으면 로컬 URL 반환 (에러는 호출측에서 처리)
+  return NAS_LOCAL_URL;
+}
+
+/**
+ * NAS 로그인 - 활성 URL을 자동 감지하여 접속
+ * @returns sid와 사용된 nasUrl을 함께 반환
+ */
+export async function nasLogin(otpCode?: string): Promise<{ sid: string; nasUrl: string }> {
+  const nasUrl = await getActiveNasUrl();
+
   const params: Record<string, string> = {
     api: 'SYNO.API.Auth',
     version: '6',
@@ -40,7 +100,7 @@ export async function nasLogin(otpCode?: string): Promise<string> {
   }
 
   const searchParams = new URLSearchParams(params);
-  const res = await fetch(`${NAS_URL}/webapi/auth.cgi?${searchParams}`);
+  const res = await fetch(`${nasUrl}/webapi/auth.cgi?${searchParams}`);
   const data = await res.json();
 
   if (!data.success) {
@@ -59,7 +119,7 @@ export async function nasLogin(otpCode?: string): Promise<string> {
     throw new Error(`NAS 로그인 실패 (에러코드: ${code})`);
   }
 
-  return data.data.sid;
+  return { sid: data.data.sid, nasUrl };
 }
 
 /**
@@ -67,7 +127,9 @@ export async function nasLogin(otpCode?: string): Promise<string> {
  */
 export async function nasLoginWithOtp(
   otpCode: string
-): Promise<{ sid: string; deviceToken: string }> {
+): Promise<{ sid: string; deviceToken: string; nasUrl: string }> {
+  const nasUrl = await getActiveNasUrl();
+
   const params = new URLSearchParams({
     api: 'SYNO.API.Auth',
     version: '6',
@@ -81,7 +143,7 @@ export async function nasLoginWithOtp(
     device_name: 'LectureNotesPlatform',
   });
 
-  const res = await fetch(`${NAS_URL}/webapi/auth.cgi?${params}`);
+  const res = await fetch(`${nasUrl}/webapi/auth.cgi?${params}`);
   const data = await res.json();
 
   if (!data.success) {
@@ -95,10 +157,13 @@ export async function nasLoginWithOtp(
   return {
     sid: data.data.sid,
     deviceToken: data.data.did || '',
+    nasUrl,
   };
 }
 
-export async function nasLogout(sid: string): Promise<void> {
+export async function nasLogout(sid: string, nasUrl?: string): Promise<void> {
+  const url = nasUrl || await getActiveNasUrl();
+
   const params = new URLSearchParams({
     api: 'SYNO.API.Auth',
     version: '6',
@@ -107,5 +172,5 @@ export async function nasLogout(sid: string): Promise<void> {
     _sid: sid,
   });
 
-  await fetch(`${NAS_URL}/webapi/auth.cgi?${params}`).catch(() => {});
+  await fetch(`${url}/webapi/auth.cgi?${params}`).catch(() => {});
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { NAS_URL, isNasConfigured, nasLogin, nasLogout } from '@/lib/nas-auth';
+import { isNasConfigured, nasLogin, nasLogout } from '@/lib/nas-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
   }
 
   let sid = '';
+  let nasUrl = '';
 
   try {
     const { searchParams } = new URL(req.url);
@@ -24,7 +25,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    sid = await nasLogin();
+    const login = await nasLogin();
+    sid = login.sid;
+    nasUrl = login.nasUrl;
 
     // Download file from NAS
     const params = new URLSearchParams({
@@ -36,7 +39,7 @@ export async function GET(req: NextRequest) {
       _sid: sid,
     });
 
-    const res = await fetch(`${NAS_URL}/webapi/entry.cgi?${params}`);
+    const res = await fetch(`${nasUrl}/webapi/entry.cgi?${params}`);
 
     if (!res.ok) {
       throw new Error('파일 다운로드 실패');
@@ -88,7 +91,7 @@ export async function GET(req: NextRequest) {
     );
   } finally {
     if (sid) {
-      await nasLogout(sid);
+      await nasLogout(sid, nasUrl);
     }
   }
 }

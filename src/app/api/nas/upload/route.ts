@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  NAS_URL,
   NAS_UPLOAD_PATH,
   isNasConfigured,
   nasLogin,
   nasLogout,
 } from '@/lib/nas-auth';
 
-async function ensureFolder(sid: string, folderPath: string): Promise<void> {
+async function ensureFolder(nasUrl: string, sid: string, folderPath: string): Promise<void> {
   const parentPath = folderPath.substring(0, folderPath.lastIndexOf('/'));
   const folderName = folderPath.substring(folderPath.lastIndexOf('/') + 1);
 
@@ -23,7 +22,7 @@ async function ensureFolder(sid: string, folderPath: string): Promise<void> {
     _sid: sid,
   });
 
-  await fetch(`${NAS_URL}/webapi/entry.cgi?${params}`).catch(() => {});
+  await fetch(`${nasUrl}/webapi/entry.cgi?${params}`).catch(() => {});
 }
 
 export async function POST(req: NextRequest) {
@@ -35,6 +34,7 @@ export async function POST(req: NextRequest) {
   }
 
   let sid = '';
+  let nasUrl = '';
 
   try {
     const formData = await req.formData();
@@ -48,8 +48,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Login to NAS
-    sid = await nasLogin();
+    // Login to NAS (자동으로 로컬/외부 URL 감지)
+    const login = await nasLogin();
+    sid = login.sid;
+    nasUrl = login.nasUrl;
 
     // Create unique file path to avoid collisions
     const timestamp = Date.now();
@@ -58,7 +60,7 @@ export async function POST(req: NextRequest) {
     const publicId = `${timestamp}_${safeName}`;
 
     // Ensure upload folder exists
-    await ensureFolder(sid, NAS_UPLOAD_PATH);
+    await ensureFolder(nasUrl, sid, NAS_UPLOAD_PATH);
 
     // Upload file to NAS via File Station API
     const uploadForm = new FormData();
@@ -76,7 +78,7 @@ export async function POST(req: NextRequest) {
     uploadForm.append('file', blob, `${timestamp}_${safeName}`);
 
     const uploadRes = await fetch(
-      `${NAS_URL}/webapi/entry.cgi?_sid=${sid}`,
+      `${nasUrl}/webapi/entry.cgi?_sid=${sid}`,
       {
         method: 'POST',
         body: uploadForm,
@@ -113,7 +115,7 @@ export async function POST(req: NextRequest) {
     );
   } finally {
     if (sid) {
-      await nasLogout(sid);
+      await nasLogout(sid, nasUrl);
     }
   }
 }

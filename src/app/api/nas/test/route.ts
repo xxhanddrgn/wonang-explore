@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import {
-  NAS_URL,
   NAS_UPLOAD_PATH,
   NAS_ACCOUNT,
   isNasConfigured,
+  getActiveNasUrl,
 } from '@/lib/nas-auth';
 
 export async function GET() {
@@ -11,8 +11,12 @@ export async function GET() {
     return NextResponse.json({ error: 'NAS 환경변수 미설정' }, { status: 500 });
   }
 
+  const nasUrl = await getActiveNasUrl();
+
   const results: Record<string, unknown> = {
-    nasUrl: NAS_URL,
+    nasUrl,
+    nasLocalUrl: process.env.NAS_URL || '(미설정)',
+    nasExternalUrl: process.env.NAS_EXTERNAL_URL || '(미설정)',
     account: NAS_ACCOUNT,
     uploadPath: NAS_UPLOAD_PATH,
   };
@@ -31,7 +35,7 @@ export async function GET() {
         format: 'sid',
       });
 
-      const res = await fetch(`${NAS_URL}/webapi/${endpoint}?${params}`);
+      const res = await fetch(`${nasUrl}/webapi/${endpoint}?${params}`);
       const data = await res.json();
       results[`login_${endpoint}`] = { success: data.success, sid: data.data?.sid ? '(있음)' : '(없음)', error: data.error };
 
@@ -57,7 +61,7 @@ export async function GET() {
       method: 'list_share',
       _sid: sid,
     });
-    const res = await fetch(`${NAS_URL}/webapi/entry.cgi?${params}`);
+    const res = await fetch(`${nasUrl}/webapi/entry.cgi?${params}`);
     const data = await res.json();
     if (data.success) {
       results.sharedFolders = data.data.shares.map((s: { path: string; name: string }) => s.path);
@@ -77,7 +81,7 @@ export async function GET() {
       folder_path: NAS_UPLOAD_PATH,
       _sid: sid,
     });
-    const res = await fetch(`${NAS_URL}/webapi/entry.cgi?${params}`);
+    const res = await fetch(`${nasUrl}/webapi/entry.cgi?${params}`);
     const data = await res.json();
     results.uploadPathCheck = data.success
       ? { exists: true, fileCount: data.data?.files?.length ?? 0 }
@@ -102,7 +106,7 @@ export async function GET() {
         _sid: sid,
       });
 
-      const res = await fetch(`${NAS_URL}/webapi/entry.cgi?${params}`);
+      const res = await fetch(`${nasUrl}/webapi/entry.cgi?${params}`);
       const data = await res.json();
       results.folderCreation = data.success
         ? { success: true, message: '업로드 폴더 생성 완료!' }
@@ -117,7 +121,7 @@ export async function GET() {
           folder_path: NAS_UPLOAD_PATH,
           _sid: sid,
         });
-        const checkRes = await fetch(`${NAS_URL}/webapi/entry.cgi?${checkParams}`);
+        const checkRes = await fetch(`${nasUrl}/webapi/entry.cgi?${checkParams}`);
         const checkData = await checkRes.json();
         results.uploadPathCheck = checkData.success
           ? { exists: true, fileCount: checkData.data?.files?.length ?? 0 }
@@ -137,7 +141,7 @@ export async function GET() {
       session: 'FileStation',
       _sid: sid,
     });
-    await fetch(`${NAS_URL}/webapi/auth.cgi?${params}`);
+    await fetch(`${nasUrl}/webapi/auth.cgi?${params}`);
   } catch {}
 
   return NextResponse.json(results, { status: 200 });
