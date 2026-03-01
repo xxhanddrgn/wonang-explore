@@ -32,47 +32,52 @@ export function generateId(): string {
 // ===== Server Sync =====
 
 let syncTimeout: ReturnType<typeof setTimeout> | null = null;
+let syncStatusListener: ((status: string) => void) | null = null;
 
-let lastSyncStatus: 'ok' | 'error' | 'pending' = 'pending';
-
-export function getSyncStatus() {
-  return lastSyncStatus;
+/** 동기화 상태 변경 시 호출할 콜백 등록 */
+export function onSyncStatusChange(listener: (status: string) => void) {
+  syncStatusListener = listener;
 }
 
+/** 서버에 즉시 저장 (await 가능) */
+async function syncToServerImmediate(): Promise<boolean> {
+  try {
+    const data: AppData = {
+      courses: getItem<Course[]>(COURSES_KEY, []),
+      notes: getItem<Note[]>(NOTES_KEY, []),
+      materials: getItem<Material[]>(MATERIALS_KEY, []),
+    };
+    const res = await fetch('/api/data', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) {
+      syncStatusListener?.('server');
+      return true;
+    }
+    console.error('[Sync] 서버 저장 실패:', res.status);
+    syncStatusListener?.('local-offline');
+    return false;
+  } catch (error) {
+    console.error('[Sync] 서버 저장 실패:', error);
+    syncStatusListener?.('local-offline');
+    return false;
+  }
+}
+
+/** 디바운스된 서버 동기화 (일반 편집 시 사용) */
 function syncToServer(): void {
   if (syncTimeout) clearTimeout(syncTimeout);
-  syncTimeout = setTimeout(async () => {
-    try {
-      const data: AppData = {
-        courses: getItem<Course[]>(COURSES_KEY, []),
-        notes: getItem<Note[]>(NOTES_KEY, []),
-        materials: getItem<Material[]>(MATERIALS_KEY, []),
-      };
-      const res = await fetch('/api/data', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) {
-        lastSyncStatus = 'ok';
-      } else {
-        lastSyncStatus = 'error';
-        console.error('서버 동기화 실패:', res.status);
-      }
-    } catch (error) {
-      lastSyncStatus = 'error';
-      console.error('서버 동기화 실패:', error);
-    }
-  }, 1000);
+  syncTimeout = setTimeout(() => syncToServerImmediate(), 1000);
 }
 
 /**
  * 서버에서 데이터 로드 (앱 시작 시 호출)
  * - 서버에 데이터가 있으면: 서버 데이터 사용 (source of truth)
- * - 서버가 비었고 로컬에 데이터가 있으면: 로컬 → 서버로 마이그레이션
- * - 반환값에 syncSource를 포함하여 어디서 데이터를 가져왔는지 표시
+ * - 서버가 비었고 로컬에 데이터가 있으면: 로컬 → 서버로 마이그레이션 (결과 대기)
  */
-export async function loadFromServer(): Promise<AppData & { syncSource?: string }> {
+export async function loadFromServer(): Promise<AppData & { syncSource: string }> {
   const localData: AppData = {
     courses: getItem<Course[]>(COURSES_KEY, []),
     notes: getItem<Note[]>(NOTES_KEY, []),
@@ -98,20 +103,17 @@ export async function loadFromServer(): Promise<AppData & { syncSource?: string 
       setItem(COURSES_KEY, serverData.courses);
       setItem(NOTES_KEY, serverData.notes);
       setItem(MATERIALS_KEY, serverData.materials);
-      lastSyncStatus = 'ok';
       return { ...serverData, syncSource: 'server' };
     } else if (localHasData) {
-      // 서버 비어있고 로컬에 데이터 있음 → 서버로 마이그레이션
+      // 서버 비어있고 로컬에 데이터 있음 → 서버로 마이그레이션 (즉시 + 결과 대기)
       console.log('[Sync] 서버 데이터 없음, 로컬 데이터를 서버로 업로드...');
-      syncToServer();
-      return { ...localData, syncSource: 'local-migrating' };
+      const ok = await syncToServerImmediate();
+      return { ...localData, syncSource: ok ? 'server' : 'local-offline' };
     }
 
-    lastSyncStatus = 'ok';
     return { ...serverData, syncSource: 'server-empty' };
   } catch (error) {
     // 서버 연결 실패 → localStorage 캐시 사용
-    lastSyncStatus = 'error';
     console.error('[Sync] 서버 연결 실패, localStorage 사용:', error);
     return { ...localData, syncSource: 'local-offline' };
   }

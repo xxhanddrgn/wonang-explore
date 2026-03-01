@@ -16,6 +16,7 @@ import {
   deleteMaterial as deleteMaterialFromStorage,
   generateId,
   loadFromServer,
+  onSyncStatusChange,
 } from '@/lib/storage';
 import Sidebar from '@/components/Sidebar';
 import CourseView from '@/components/CourseView';
@@ -36,12 +37,13 @@ export default function Home() {
     setAllMaterials(getMaterials());
   }, []);
 
-  // Load data from server on mount
+  // Load data from server on mount + listen for sync status changes
   useEffect(() => {
+    onSyncStatusChange((status) => setSyncSource(status));
     loadFromServer().then((data) => {
       setCourses(data.courses);
       setAllMaterials(data.materials);
-      setSyncSource(data.syncSource || 'unknown');
+      setSyncSource(data.syncSource);
       setMounted(true);
     });
   }, []);
