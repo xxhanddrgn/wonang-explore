@@ -102,11 +102,14 @@ export async function PUT(req: NextRequest) {
     uploadForm.append('_sid', sid);
     uploadForm.append('file', blob, METADATA_FILE);
 
-    const uploadRes = await fetch(`${nasUrl}/webapi/entry.cgi?_sid=${sid}`, {
-      method: 'POST',
-      body: uploadForm,
-      headers: { Cookie: `id=${sid}` },
-    });
+    // Synology DSM 7: Upload API는 URL 경로에 API 이름 필수
+    const uploadRes = await fetch(
+      `${nasUrl}/webapi/entry.cgi/SYNO.FileStation.Upload?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=${sid}`,
+      {
+        method: 'POST',
+        body: uploadForm,
+      }
+    );
 
     const uploadText = await uploadRes.text();
     let uploadData;
