@@ -87,14 +87,40 @@ export async function GET() {
     };
   }
 
-  // 4. 업로드(쓰기) 테스트
+  // 4. API 정보 조회 (올바른 Upload 엔드포인트 확인)
+  let uploadPath = 'entry.cgi';
+  let uploadMaxVersion = 2;
+  try {
+    const infoParams = new URLSearchParams({
+      api: 'SYNO.API.Info',
+      version: '1',
+      method: 'query',
+      query: 'SYNO.FileStation.Upload',
+    });
+    const infoRes = await fetch(`${nasUrl}/webapi/query.cgi?${infoParams}`);
+    const infoData = await infoRes.json();
+    if (infoData.success && infoData.data?.['SYNO.FileStation.Upload']) {
+      const uploadInfo = infoData.data['SYNO.FileStation.Upload'];
+      uploadPath = uploadInfo.path || 'entry.cgi';
+      uploadMaxVersion = uploadInfo.maxVersion || 2;
+    }
+    status.apiInfo = {
+      uploadPath,
+      uploadMaxVersion,
+      raw: infoData.data?.['SYNO.FileStation.Upload'] || null,
+    };
+  } catch (error) {
+    status.apiInfo = { error: error instanceof Error ? error.message : String(error) };
+  }
+
+  // 5. 업로드(쓰기) 테스트 - API가 알려준 정확한 경로 사용
   try {
     const testContent = JSON.stringify({ test: true, timestamp: new Date().toISOString() });
     const blob = new Blob([testContent], { type: 'application/json' });
 
     const uploadForm = new FormData();
     uploadForm.append('api', 'SYNO.FileStation.Upload');
-    uploadForm.append('version', '2');
+    uploadForm.append('version', String(Math.min(uploadMaxVersion, 2)));
     uploadForm.append('method', 'upload');
     uploadForm.append('path', NAS_UPLOAD_PATH);
     uploadForm.append('create_parents', 'true');
@@ -102,15 +128,13 @@ export async function GET() {
     uploadForm.append('_sid', sid);
     uploadForm.append('file', blob, '_sync_test.json');
 
-    // Synology DSM 7: _sid를 URL 쿼리 + FormData 양쪽 모두 전달 필수
-    const uploadRes = await fetch(
-      `${nasUrl}/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=${sid}`,
-      {
-        method: 'POST',
-        body: uploadForm,
-        headers: { Cookie: `id=${sid}` },
-      }
-    );
+    // API Info가 알려준 경로 사용 (예: entry.cgi 또는 FileStation/api_upload.cgi)
+    const uploadUrl = `${nasUrl}/webapi/${uploadPath}?_sid=${sid}`;
+    const uploadRes = await fetch(uploadUrl, {
+      method: 'POST',
+      body: uploadForm,
+      headers: { Cookie: `id=${sid}` },
+    });
 
     const uploadText = await uploadRes.text();
     try {
@@ -119,12 +143,14 @@ export async function GET() {
         success: uploadData.success,
         error: uploadData.error || null,
         httpStatus: uploadRes.status,
+        urlUsed: uploadUrl.replace(sid, 'SID_HIDDEN'),
       };
     } catch {
       status.uploadTest = {
         success: false,
         httpStatus: uploadRes.status,
         rawResponse: uploadText.substring(0, 500),
+        urlUsed: uploadUrl.replace(sid, 'SID_HIDDEN'),
       };
     }
   } catch (error) {
@@ -134,7 +160,7 @@ export async function GET() {
     };
   }
 
-  // 5. 결론
+  // 6. 결론
   const loginOk = (status.loginTest as { success: boolean }).success;
   const uploadOk = (status.uploadTest as { success: boolean })?.success;
   const metaExists = (status.metadataTest as { exists?: boolean })?.exists;
