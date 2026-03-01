@@ -108,9 +108,17 @@ export async function PUT(req: NextRequest) {
       headers: { Cookie: `id=${sid}` },
     });
 
-    const uploadData = await uploadRes.json();
+    const uploadText = await uploadRes.text();
+    let uploadData;
+    try {
+      uploadData = JSON.parse(uploadText);
+    } catch {
+      console.error('[Data PUT] 업로드 응답 파싱 실패:', uploadText.substring(0, 200));
+      throw new Error('NAS 업로드 응답 파싱 실패');
+    }
 
     if (!uploadData.success) {
+      console.error('[Data PUT] 업로드 실패:', JSON.stringify(uploadData.error));
       throw new Error(`메타데이터 저장 실패 (에러코드: ${uploadData.error?.code})`);
     }
 
