@@ -27,6 +27,7 @@ export async function GET() {
     const login = await nasLogin();
     sid = login.sid;
     nasUrl = login.nasUrl;
+    console.log('[Data GET] NAS 로그인 성공, URL:', nasUrl);
 
     const filePath = `${NAS_UPLOAD_PATH}/${METADATA_FILE}`;
     const params = new URLSearchParams({
@@ -41,6 +42,7 @@ export async function GET() {
     const res = await fetch(`${nasUrl}/webapi/entry.cgi?${params}`);
 
     if (!res.ok) {
+      console.error('[Data GET] NAS 응답 에러:', res.status, res.statusText);
       return NextResponse.json(empty);
     }
 
@@ -50,14 +52,17 @@ export async function GET() {
       const parsed = JSON.parse(text);
       // Synology 에러 응답인 경우 (파일 미존재 등)
       if (parsed.success === false) {
+        console.log('[Data GET] 메타데이터 파일 미존재 (첫 사용)');
         return NextResponse.json(empty);
       }
+      console.log('[Data GET] 메타데이터 로드 성공 - 과목:', parsed.courses?.length, '노트:', parsed.notes?.length, '자료:', parsed.materials?.length);
       return NextResponse.json(parsed);
     } catch {
+      console.error('[Data GET] JSON 파싱 실패, 텍스트 길이:', text.length);
       return NextResponse.json(empty);
     }
   } catch (error) {
-    console.error('Data load error:', error);
+    console.error('[Data GET] NAS 연결/로그인 실패:', error instanceof Error ? error.message : error);
     return NextResponse.json(empty);
   } finally {
     if (sid) {
@@ -82,6 +87,7 @@ export async function PUT(req: NextRequest) {
     const login = await nasLogin();
     sid = login.sid;
     nasUrl = login.nasUrl;
+    console.log('[Data PUT] NAS 로그인 성공, 저장 시작...');
 
     const content = JSON.stringify(data);
     const blob = new Blob([content], { type: 'application/json' });
@@ -108,6 +114,7 @@ export async function PUT(req: NextRequest) {
       throw new Error(`메타데이터 저장 실패 (에러코드: ${uploadData.error?.code})`);
     }
 
+    console.log('[Data PUT] 메타데이터 저장 성공');
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Data save error:', error);

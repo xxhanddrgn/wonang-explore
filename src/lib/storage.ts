@@ -33,6 +33,12 @@ export function generateId(): string {
 
 let syncTimeout: ReturnType<typeof setTimeout> | null = null;
 
+let lastSyncStatus: 'ok' | 'error' | 'pending' = 'pending';
+
+export function getSyncStatus() {
+  return lastSyncStatus;
+}
+
 function syncToServer(): void {
   if (syncTimeout) clearTimeout(syncTimeout);
   syncTimeout = setTimeout(async () => {
@@ -42,12 +48,19 @@ function syncToServer(): void {
         notes: getItem<Note[]>(NOTES_KEY, []),
         materials: getItem<Material[]>(MATERIALS_KEY, []),
       };
-      await fetch('/api/data', {
+      const res = await fetch('/api/data', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
+      if (res.ok) {
+        lastSyncStatus = 'ok';
+      } else {
+        lastSyncStatus = 'error';
+        console.error('서버 동기화 실패:', res.status);
+      }
     } catch (error) {
+      lastSyncStatus = 'error';
       console.error('서버 동기화 실패:', error);
     }
   }, 1000);
@@ -57,8 +70,9 @@ function syncToServer(): void {
  * 서버에서 데이터 로드 (앱 시작 시 호출)
  * - 서버에 데이터가 있으면: 서버 데이터 사용 (source of truth)
  * - 서버가 비었고 로컬에 데이터가 있으면: 로컬 → 서버로 마이그레이션
+ * - 반환값에 syncSource를 포함하여 어디서 데이터를 가져왔는지 표시
  */
-export async function loadFromServer(): Promise<AppData> {
+export async function loadFromServer(): Promise<AppData & { syncSource?: string }> {
   const localData: AppData = {
     courses: getItem<Course[]>(COURSES_KEY, []),
     notes: getItem<Note[]>(NOTES_KEY, []),
@@ -67,7 +81,7 @@ export async function loadFromServer(): Promise<AppData> {
 
   try {
     const res = await fetch('/api/data');
-    if (!res.ok) throw new Error('Server load failed');
+    if (!res.ok) throw new Error(`Server responded ${res.status}`);
     const serverData: AppData = await res.json();
 
     const serverHasData =
@@ -80,21 +94,26 @@ export async function loadFromServer(): Promise<AppData> {
       localData.materials.length > 0;
 
     if (serverHasData) {
-      // 서버에 데이터 있음 → localStorage 캐시 업데이트
+      // 서버(NAS)에 데이터 있음 → localStorage 캐시 업데이트
       setItem(COURSES_KEY, serverData.courses);
       setItem(NOTES_KEY, serverData.notes);
       setItem(MATERIALS_KEY, serverData.materials);
-      return serverData;
+      lastSyncStatus = 'ok';
+      return { ...serverData, syncSource: 'server' };
     } else if (localHasData) {
       // 서버 비어있고 로컬에 데이터 있음 → 서버로 마이그레이션
+      console.log('[Sync] 서버 데이터 없음, 로컬 데이터를 서버로 업로드...');
       syncToServer();
-      return localData;
+      return { ...localData, syncSource: 'local-migrating' };
     }
 
-    return serverData;
-  } catch {
+    lastSyncStatus = 'ok';
+    return { ...serverData, syncSource: 'server-empty' };
+  } catch (error) {
     // 서버 연결 실패 → localStorage 캐시 사용
-    return localData;
+    lastSyncStatus = 'error';
+    console.error('[Sync] 서버 연결 실패, localStorage 사용:', error);
+    return { ...localData, syncSource: 'local-offline' };
   }
 }
 
