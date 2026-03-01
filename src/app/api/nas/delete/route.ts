@@ -1,45 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const NAS_URL = process.env.NAS_URL || '';
-const NAS_ACCOUNT = process.env.NAS_ACCOUNT || '';
-const NAS_PASSWORD = process.env.NAS_PASSWORD || '';
-const NAS_UPLOAD_PATH = process.env.NAS_UPLOAD_PATH || '/lecture-notes';
-
-async function nasLogin(): Promise<string> {
-  const params = new URLSearchParams({
-    api: 'SYNO.API.Auth',
-    version: '7',
-    method: 'login',
-    account: NAS_ACCOUNT,
-    passwd: NAS_PASSWORD,
-    session: 'FileStation',
-    format: 'sid',
-  });
-
-  const res = await fetch(`${NAS_URL}/webapi/entry.cgi?${params}`);
-  const data = await res.json();
-
-  if (!data.success) {
-    throw new Error(`NAS 로그인 실패 (에러코드: ${data.error?.code})`);
-  }
-
-  return data.data.sid;
-}
-
-async function nasLogout(sid: string): Promise<void> {
-  const params = new URLSearchParams({
-    api: 'SYNO.API.Auth',
-    version: '7',
-    method: 'logout',
-    session: 'FileStation',
-    _sid: sid,
-  });
-
-  await fetch(`${NAS_URL}/webapi/entry.cgi?${params}`).catch(() => {});
-}
+import {
+  NAS_URL,
+  NAS_UPLOAD_PATH,
+  isNasConfigured,
+  nasLogin,
+  nasLogout,
+} from '@/lib/nas-auth';
 
 export async function POST(req: NextRequest) {
-  if (!NAS_URL || !NAS_ACCOUNT || !NAS_PASSWORD) {
+  if (!isNasConfigured()) {
     return NextResponse.json(
       { error: 'NAS 환경변수가 설정되지 않았습니다.' },
       { status: 500 }
