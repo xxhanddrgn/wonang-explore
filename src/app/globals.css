@@ -82,6 +82,11 @@
   @apply mt-0.5;
 }
 
+.tiptap-editor img {
+  @apply max-w-full h-auto rounded-lg my-3 border border-gray-200;
+  max-height: 400px;
+}
+
 .tiptap-editor p.is-editor-empty:first-child::before {
   @apply text-gray-400 float-left h-0 pointer-events-none;
   content: attr(data-placeholder);
