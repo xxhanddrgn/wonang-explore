@@ -4,6 +4,8 @@ import {
   isNasConfigured,
   nasLogin,
   nasLogout,
+  ensureNasFolder,
+  uploadToNasFileStation,
 } from '@/lib/nas-auth';
 
 export const maxDuration = 60;
@@ -89,36 +91,13 @@ export async function PUT(req: NextRequest) {
     nasUrl = login.nasUrl;
     console.log('[Data PUT] NAS 로그인 성공, 저장 시작...');
 
+    // 업로드 폴더 확보
+    await ensureNasFolder(nasUrl, sid, NAS_UPLOAD_PATH);
+
     const content = JSON.stringify(data);
     const blob = new Blob([content], { type: 'application/json' });
 
-    const uploadForm = new FormData();
-    uploadForm.append('api', 'SYNO.FileStation.Upload');
-    uploadForm.append('version', '2');
-    uploadForm.append('method', 'upload');
-    uploadForm.append('path', NAS_UPLOAD_PATH);
-    uploadForm.append('create_parents', 'true');
-    uploadForm.append('overwrite', 'true');
-    uploadForm.append('_sid', sid);
-    uploadForm.append('file', blob, METADATA_FILE);
-
-    // Synology DSM 7: Upload API는 URL 경로에 API 이름 필수
-    const uploadRes = await fetch(
-      `${nasUrl}/webapi/entry.cgi/SYNO.FileStation.Upload?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=${sid}`,
-      {
-        method: 'POST',
-        body: uploadForm,
-      }
-    );
-
-    const uploadText = await uploadRes.text();
-    let uploadData;
-    try {
-      uploadData = JSON.parse(uploadText);
-    } catch {
-      console.error('[Data PUT] 업로드 응답 파싱 실패:', uploadText.substring(0, 200));
-      throw new Error('NAS 업로드 응답 파싱 실패');
-    }
+    const uploadData = await uploadToNasFileStation(nasUrl, sid, NAS_UPLOAD_PATH, METADATA_FILE, blob);
 
     if (!uploadData.success) {
       console.error('[Data PUT] 업로드 실패:', JSON.stringify(uploadData.error));

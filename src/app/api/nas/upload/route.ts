@@ -4,28 +4,12 @@ import {
   isNasConfigured,
   nasLogin,
   nasLogout,
+  ensureNasFolder,
+  uploadToNasFileStation,
 } from '@/lib/nas-auth';
 
 export const maxDuration = 60;
 
-async function ensureFolder(nasUrl: string, sid: string, folderPath: string): Promise<void> {
-  const parentPath = folderPath.substring(0, folderPath.lastIndexOf('/'));
-  const folderName = folderPath.substring(folderPath.lastIndexOf('/') + 1);
-
-  if (!parentPath || !folderName) return;
-
-  const params = new URLSearchParams({
-    api: 'SYNO.FileStation.CreateFolder',
-    version: '2',
-    method: 'create',
-    folder_path: `["${parentPath}"]`,
-    name: `["${folderName}"]`,
-    force_parent: 'true',
-    _sid: sid,
-  });
-
-  await fetch(`${nasUrl}/webapi/entry.cgi?${params}`).catch(() => {});
-}
 
 export async function POST(req: NextRequest) {
   if (!isNasConfigured()) {
@@ -62,32 +46,13 @@ export async function POST(req: NextRequest) {
     const publicId = `${timestamp}_${safeName}`;
 
     // Ensure upload folder exists
-    await ensureFolder(nasUrl, sid, NAS_UPLOAD_PATH);
-
-    // Upload file to NAS via File Station API
-    const uploadForm = new FormData();
-    uploadForm.append('api', 'SYNO.FileStation.Upload');
-    uploadForm.append('version', '2');
-    uploadForm.append('method', 'upload');
-    uploadForm.append('path', NAS_UPLOAD_PATH);
-    uploadForm.append('create_parents', 'true');
-    uploadForm.append('overwrite', 'true');
-    uploadForm.append('_sid', sid);
+    await ensureNasFolder(nasUrl, sid, NAS_UPLOAD_PATH);
 
     // Convert File to Blob with the correct filename
     const fileBuffer = await file.arrayBuffer();
     const blob = new Blob([fileBuffer], { type: file.type });
-    uploadForm.append('file', blob, `${timestamp}_${safeName}`);
 
-    const uploadRes = await fetch(
-      `${nasUrl}/webapi/entry.cgi/SYNO.FileStation.Upload?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=${sid}`,
-      {
-        method: 'POST',
-        body: uploadForm,
-      }
-    );
-
-    const uploadData = await uploadRes.json();
+    const uploadData = await uploadToNasFileStation(nasUrl, sid, NAS_UPLOAD_PATH, `${timestamp}_${safeName}`, blob);
 
     if (!uploadData.success) {
       throw new Error(
