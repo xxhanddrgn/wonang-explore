@@ -4,6 +4,7 @@ import {
   isNasConfigured,
   nasLogin,
   nasLogout,
+  getDeviceTokenFromCookies,
 } from '@/lib/nas-auth';
 
 export async function POST(req: NextRequest) {
@@ -27,7 +28,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const login = await nasLogin();
+    const cookieToken = getDeviceTokenFromCookies(req.headers.get('cookie'));
+    const login = await nasLogin(undefined, cookieToken);
     sid = login.sid;
     nasUrl = login.nasUrl;
 

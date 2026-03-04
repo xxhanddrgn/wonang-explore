@@ -6,6 +6,7 @@ import {
   nasLogout,
   ensureNasFolder,
   uploadToNasFileStation,
+  getDeviceTokenFromCookies,
 } from '@/lib/nas-auth';
 
 export const maxDuration = 60;
@@ -15,7 +16,7 @@ const METADATA_FILE = '_metadata.json';
 /**
  * GET: NAS에서 메타데이터(과목, 필기, 자료 목록) 로드
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   const empty = { courses: [], notes: [], materials: [] };
 
   if (!isNasConfigured()) {
@@ -26,7 +27,8 @@ export async function GET() {
   let nasUrl = '';
 
   try {
-    const login = await nasLogin();
+    const cookieToken = getDeviceTokenFromCookies(req.headers.get('cookie'));
+    const login = await nasLogin(undefined, cookieToken);
     sid = login.sid;
     nasUrl = login.nasUrl;
     console.log('[Data GET] NAS 로그인 성공, URL:', nasUrl);
@@ -86,7 +88,8 @@ export async function PUT(req: NextRequest) {
 
   try {
     const data = await req.json();
-    const login = await nasLogin();
+    const cookieToken = getDeviceTokenFromCookies(req.headers.get('cookie'));
+    const login = await nasLogin(undefined, cookieToken);
     sid = login.sid;
     nasUrl = login.nasUrl;
     console.log('[Data PUT] NAS 로그인 성공, 저장 시작...');

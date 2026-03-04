@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isNasConfigured, nasLoginWithOtp, nasLogout } from '@/lib/nas-auth';
+import { isNasConfigured, nasLoginWithOtp, nasLogout, DEVICE_TOKEN_COOKIE } from '@/lib/nas-auth';
 
 /**
  * NAS 2단계 인증 설정 엔드포인트
@@ -36,12 +36,20 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({
+    // 쿠키에 device token 자동 저장 (1년 유효)
+    const response = NextResponse.json({
       success: true,
-      message: 'Device token 발급 완료! Vercel 환경변수에 추가하세요.',
+      message: 'Device token 발급 및 쿠키 저장 완료! 이제 동기화가 작동합니다.',
       deviceToken,
-      envLine: `NAS_DEVICE_TOKEN=${deviceToken}`,
     });
+    response.cookies.set(DEVICE_TOKEN_COOKIE, deviceToken, {
+      path: '/',
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      maxAge: 365 * 24 * 60 * 60, // 1년
+    });
+    return response;
   } catch (error) {
     console.error('NAS setup error:', error);
     return NextResponse.json(
@@ -123,15 +131,7 @@ export async function GET() {
 
     <div class="step" style="margin-top: 20px;">
       <span class="step-num">3</span>
-      <p>발급된 토큰을 Vercel 환경변수에 추가하세요</p>
-    </div>
-
-    <div class="instructions">
-      <ol>
-        <li>Vercel 대시보드 → Settings → Environment Variables</li>
-        <li><strong>NAS_DEVICE_TOKEN</strong> 이름으로 토큰 값 추가</li>
-        <li>Deployments → 최신 배포 Redeploy</li>
-      </ol>
+      <p>인증 성공 시 자동으로 쿠키에 저장됩니다. 끝!</p>
     </div>
   </div>
 
@@ -170,11 +170,9 @@ export async function GET() {
 
         if (data.success && data.deviceToken) {
           showResult('success',
-            '<strong>✅ 인증 성공!</strong><br><br>' +
-            'Vercel 환경변수에 추가할 값:<br>' +
-            '<div class="token-box" id="tokenBox">' + data.deviceToken + '</div>' +
-            '<button class="copy-btn" onclick="copyToken()">📋 복사</button>' +
-            '<br><br>변수명: <strong>NAS_DEVICE_TOKEN</strong>'
+            '<strong>✅ 인증 성공! 쿠키에 자동 저장되었습니다.</strong><br><br>' +
+            '이제 <a href="/" style="color:#6ee7b7;">메인 페이지</a>로 이동하면 동기화가 작동합니다.<br><br>' +
+            '<a href="/api/sync-status" style="color:#6ee7b7;">동기화 상태 확인 →</a>'
           );
         } else if (data.error) {
           showResult('error', '❌ ' + data.error);

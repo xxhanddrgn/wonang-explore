@@ -4,6 +4,7 @@ import {
   isNasConfigured,
   nasLogin,
   nasLogout,
+  getDeviceTokenFromCookies,
 } from '@/lib/nas-auth';
 
 export const dynamic = 'force-dynamic';
@@ -27,7 +28,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ exists: false, error: 'fileName 필요' }, { status: 400 });
     }
 
-    const login = await nasLogin();
+    const cookieToken = getDeviceTokenFromCookies(req.headers.get('cookie'));
+    const login = await nasLogin(undefined, cookieToken);
     sid = login.sid;
     nasUrl = login.nasUrl;
 

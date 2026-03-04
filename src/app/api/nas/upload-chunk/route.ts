@@ -5,6 +5,7 @@ import {
   nasLogin,
   nasLogout,
   uploadToNasFileStation,
+  getDeviceTokenFromCookies,
 } from '@/lib/nas-auth';
 
 export const maxDuration = 60;
@@ -36,7 +37,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const login = await nasLogin();
+    const cookieToken = getDeviceTokenFromCookies(req.headers.get('cookie'));
+    const login = await nasLogin(undefined, cookieToken);
     sid = login.sid;
     nasUrl = login.nasUrl;
 

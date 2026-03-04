@@ -19,6 +19,18 @@ const NAS_DEVICE_TOKEN = process.env.NAS_DEVICE_TOKEN || '';
 
 export { NAS_ACCOUNT, NAS_PASSWORD, NAS_UPLOAD_PATH, NAS_EXTERNAL_URL };
 
+/** Device token 쿠키 이름 */
+export const DEVICE_TOKEN_COOKIE = 'nas_device_token';
+
+/**
+ * 요청 쿠키에서 device token 추출
+ */
+export function getDeviceTokenFromCookies(cookieHeader: string | null): string {
+  if (!cookieHeader) return '';
+  const match = cookieHeader.match(/(?:^|;\s*)nas_device_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
 // 활성 URL 캐시 (5분간 유지)
 let cachedNasUrl: string | null = null;
 let lastUrlCheck = 0;
@@ -98,8 +110,11 @@ export async function getActiveNasUrl(): Promise<string> {
  * NAS 로그인 - 활성 URL을 자동 감지하여 접속
  * @returns sid와 사용된 nasUrl을 함께 반환
  */
-export async function nasLogin(otpCode?: string): Promise<{ sid: string; nasUrl: string }> {
+export async function nasLogin(otpCode?: string, cookieDeviceToken?: string): Promise<{ sid: string; nasUrl: string }> {
   const nasUrl = await getActiveNasUrl();
+
+  // device token 우선순위: 쿠키 > 환경변수
+  const deviceToken = cookieDeviceToken || NAS_DEVICE_TOKEN;
 
   const params: Record<string, string> = {
     api: 'SYNO.API.Auth',
@@ -112,8 +127,8 @@ export async function nasLogin(otpCode?: string): Promise<{ sid: string; nasUrl:
   };
 
   // Device token이 있으면 OTP 없이 로그인 가능
-  if (NAS_DEVICE_TOKEN) {
-    params.device_id = NAS_DEVICE_TOKEN;
+  if (deviceToken) {
+    params.device_id = deviceToken;
     params.device_name = 'LectureNotesPlatform';
   }
 

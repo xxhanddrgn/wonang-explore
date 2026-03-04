@@ -6,6 +6,7 @@ import {
   nasLogout,
   ensureNasFolder,
   uploadToNasFileStation,
+  getDeviceTokenFromCookies,
 } from '@/lib/nas-auth';
 
 export const maxDuration = 60;
@@ -35,7 +36,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Login to NAS (자동으로 로컬/외부 URL 감지)
-    const login = await nasLogin();
+    const cookieToken = getDeviceTokenFromCookies(req.headers.get('cookie'));
+    const login = await nasLogin(undefined, cookieToken);
     sid = login.sid;
     nasUrl = login.nasUrl;
 
