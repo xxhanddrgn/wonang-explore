@@ -125,27 +125,44 @@ export async function nasLogin(otpCode?: string): Promise<{ sid: string; nasUrl:
   }
 
   const searchParams = new URLSearchParams(params);
-  // DSM 7: entry.cgi 사용 (auth.cgi 세션이 entry.cgi에서 인식 안 되는 문제 해결)
-  const res = await fetch(`${nasUrl}/webapi/entry.cgi?${searchParams}`);
-  const data = await res.json();
 
-  if (!data.success) {
-    const code = data.error?.code;
-    if (code === 403) {
+  // 1차: entry.cgi 시도 (DSM 7 표준)
+  const entryRes = await fetch(`${nasUrl}/webapi/entry.cgi?${searchParams}`);
+  const entryData = await entryRes.json();
+
+  if (entryData.success) {
+    console.log('[NAS] entry.cgi 로그인 성공');
+    return { sid: entryData.data.sid, nasUrl };
+  }
+
+  // entry.cgi에서 OTP 요구(403) 시 → auth.cgi 폴백 (OTP 우회 가능)
+  const entryCode = entryData.error?.code;
+  if (entryCode === 403) {
+    console.log('[NAS] entry.cgi OTP 필요, auth.cgi 폴백 시도...');
+    const authRes = await fetch(`${nasUrl}/webapi/auth.cgi?${searchParams}`);
+    const authData = await authRes.json();
+
+    if (authData.success) {
+      console.log('[NAS] auth.cgi 로그인 성공');
+      return { sid: authData.data.sid, nasUrl };
+    }
+
+    const authCode = authData.error?.code;
+    if (authCode === 403) {
       throw new Error(
         'NAS 2단계 인증이 필요합니다. /api/nas/setup 에서 OTP 설정을 완료하세요.'
       );
     }
-    if (code === 400) {
-      throw new Error('NAS 계정 또는 비밀번호가 올바르지 않습니다.');
-    }
-    if (code === 404) {
-      throw new Error('OTP 코드가 올바르지 않습니다.');
-    }
-    throw new Error(`NAS 로그인 실패 (에러코드: ${code})`);
+    throw new Error(`NAS 로그인 실패 (에러코드: ${authCode})`);
   }
 
-  return { sid: data.data.sid, nasUrl };
+  if (entryCode === 400) {
+    throw new Error('NAS 계정 또는 비밀번호가 올바르지 않습니다.');
+  }
+  if (entryCode === 404) {
+    throw new Error('OTP 코드가 올바르지 않습니다.');
+  }
+  throw new Error(`NAS 로그인 실패 (에러코드: ${entryCode})`);
 }
 
 /**
@@ -230,8 +247,9 @@ export async function uploadToNasFileStation(
   uploadForm.append('_sid', sid);
   uploadForm.append('file', fileBlob, fileName);
 
+  // DSM 7: URL path에 API 이름 포함 + Cookie 헤더로 세션 보강
   const uploadRes = await fetch(
-    `${nasUrl}/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=${sid}`,
+    `${nasUrl}/webapi/entry.cgi/SYNO.FileStation.Upload?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=${sid}`,
     {
       method: 'POST',
       body: uploadForm,
@@ -258,6 +276,9 @@ export async function nasLogout(sid: string, nasUrl?: string): Promise<void> {
     _sid: sid,
   });
 
-  // DSM 7: entry.cgi 사용
-  await fetch(`${url}/webapi/entry.cgi?${params}`).catch(() => {});
+  // 양쪽 다 로그아웃 시도 (어디서 로그인했든 세션 정리)
+  await Promise.allSettled([
+    fetch(`${url}/webapi/entry.cgi?${params}`),
+    fetch(`${url}/webapi/auth.cgi?${params}`),
+  ]);
 }
