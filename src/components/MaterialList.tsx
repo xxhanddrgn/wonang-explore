@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Material } from '@/types';
 import {
   FileText,
@@ -9,6 +10,8 @@ import {
   Download,
   Trash2,
   ExternalLink,
+  Eye,
+  X,
 } from 'lucide-react';
 
 interface MaterialListProps {
@@ -19,12 +22,7 @@ interface MaterialListProps {
 function getFileIcon(fileType: string) {
   if (fileType.startsWith('image/')) return Image;
   if (fileType.includes('pdf')) return FileText;
-  if (
-    fileType.includes('spreadsheet') ||
-    fileType.includes('excel') ||
-    fileType.includes('csv')
-  )
-    return FileSpreadsheet;
+  if (fileType.includes('spreadsheet') || fileType.includes('excel') || fileType.includes('csv')) return FileSpreadsheet;
   return File;
 }
 
@@ -35,23 +33,17 @@ function formatFileSize(bytes: number): string {
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('ko-KR', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  return new Date(dateStr).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function getFileExtension(fileName: string): string {
-  const ext = fileName.split('.').pop()?.toUpperCase() || '';
-  return ext;
+  return fileName.split('.').pop()?.toUpperCase() || '';
 }
 
-export default function MaterialList({
-  materials,
-  onDelete,
-}: MaterialListProps) {
+export default function MaterialList({ materials, onDelete }: MaterialListProps) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewName, setPreviewName] = useState('');
+
   if (materials.length === 0) {
     return (
       <div className="text-center py-12 text-gray-400">
@@ -63,80 +55,84 @@ export default function MaterialList({
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      {materials.map((material) => {
-        const Icon = getFileIcon(material.fileType);
-        const ext = getFileExtension(material.fileName);
-        const isImage = material.fileType.startsWith('image/');
-
-        return (
-          <div
-            key={material.id}
-            className="group border border-gray-100 rounded-xl p-4 hover:border-indigo-200 hover:shadow-sm transition-all bg-white"
-          >
-            {/* Preview for images */}
-            {isImage && (
-              <div className="mb-3 rounded-lg overflow-hidden bg-gray-50 h-32 flex items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={material.url}
-                  alt={material.fileName}
-                  className="max-h-full max-w-full object-contain"
-                />
-              </div>
-            )}
-
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center shrink-0">
-                <Icon size={20} className="text-indigo-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800 truncate">
-                  {material.fileName}
-                </p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">
-                    {ext}
-                  </span>
-                  <span className="text-xs text-gray-400">
-                    {formatFileSize(material.fileSize)}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  {formatDate(material.uploadedAt)}
-                </p>
+    <>
+      {/* Preview Modal */}
+      {previewUrl && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setPreviewUrl(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <span className="text-sm font-medium text-gray-700 truncate">{previewName}</span>
+              <div className="flex items-center gap-2">
+                <a href={previewUrl} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-gray-500 hover:text-indigo-600 flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-50">
+                  <ExternalLink size={13} /> 새 탭
+                </a>
+                <button onClick={() => setPreviewUrl(null)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500">
+                  <X size={18} />
+                </button>
               </div>
             </div>
-
-            {/* Actions */}
-            <div className="flex gap-1.5 mt-3 pt-3 border-t border-gray-50">
-              <a
-                href={material.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 py-1.5 rounded-md transition-colors"
-              >
-                <ExternalLink size={13} />
-                열기
-              </a>
-              <a
-                href={material.url}
-                download={material.fileName}
-                className="flex-1 flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 py-1.5 rounded-md transition-colors"
-              >
-                <Download size={13} />
-                다운로드
-              </a>
-              <button
-                onClick={() => onDelete(material)}
-                className="flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-md transition-colors"
-              >
-                <Trash2 size={13} />
-              </button>
+            <div className="flex-1 bg-gray-100">
+              <iframe src={previewUrl} className="w-full h-full border-0" title={previewName} />
             </div>
           </div>
-        );
-      })}
-    </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {materials.map((material) => {
+          const Icon = getFileIcon(material.fileType);
+          const ext = getFileExtension(material.fileName);
+          const isImage = material.fileType.startsWith('image/');
+          const isPdf = material.fileType.includes('pdf');
+          const canPreview = isImage || isPdf;
+
+          return (
+            <div key={material.id} className="group border border-gray-100 rounded-xl p-4 hover:border-indigo-200 hover:shadow-sm transition-all bg-white">
+              {isImage && (
+                <div className="mb-3 rounded-lg overflow-hidden bg-gray-50 h-32 flex items-center justify-center cursor-pointer"
+                  onClick={() => { setPreviewUrl(material.url); setPreviewName(material.fileName); }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={material.url} alt={material.fileName} className="max-h-full max-w-full object-contain" />
+                </div>
+              )}
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center shrink-0">
+                  <Icon size={20} className="text-indigo-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">{material.fileName}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">{ext}</span>
+                    <span className="text-xs text-gray-400">{formatFileSize(material.fileSize)}</span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">{formatDate(material.uploadedAt)}</p>
+                </div>
+              </div>
+              <div className="flex gap-1.5 mt-3 pt-3 border-t border-gray-50">
+                {canPreview && (
+                  <button onClick={() => { setPreviewUrl(material.url); setPreviewName(material.fileName); }}
+                    className="flex-1 flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 py-1.5 rounded-md transition-colors">
+                    <Eye size={13} /> 미리보기
+                  </button>
+                )}
+                <a href={material.url} target="_blank" rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 py-1.5 rounded-md transition-colors">
+                  <ExternalLink size={13} /> 열기
+                </a>
+                <a href={material.url} download={material.fileName}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 py-1.5 rounded-md transition-colors">
+                  <Download size={13} /> 다운로드
+                </a>
+                <button onClick={() => onDelete(material)}
+                  className="flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-md transition-colors">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }

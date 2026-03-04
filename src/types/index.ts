@@ -13,6 +13,8 @@ export interface Note {
   courseId: string;
   title: string;
   content: string;
+  tags?: string[];
+  week?: number;
   createdAt: string;
   updatedAt: string;
 }
