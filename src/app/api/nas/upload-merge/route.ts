@@ -4,6 +4,7 @@ import {
   isNasConfigured,
   nasLogin,
   nasLogout,
+  uploadToNasFileStation,
 } from '@/lib/nas-auth';
 
 export const maxDuration = 60;
@@ -77,27 +78,9 @@ export async function POST(req: NextRequest) {
     const safeName = fileName.replace(/[^a-zA-Z0-9가-힣._-]/g, '_');
     const finalFileName = `${timestamp}_${safeName}`;
 
-    const uploadForm = new FormData();
-    uploadForm.append('api', 'SYNO.FileStation.Upload');
-    uploadForm.append('version', '2');
-    uploadForm.append('method', 'upload');
-    uploadForm.append('path', NAS_UPLOAD_PATH);
-    uploadForm.append('create_parents', 'true');
-    uploadForm.append('overwrite', 'true');
-    uploadForm.append('_sid', sid);
-
     const blob = new Blob([combined]);
-    uploadForm.append('file', blob, finalFileName);
 
-    const uploadRes = await fetch(
-      `${nasUrl}/webapi/entry.cgi/SYNO.FileStation.Upload?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=${sid}`,
-      {
-        method: 'POST',
-        body: uploadForm,
-      }
-    );
-
-    const uploadData = await uploadRes.json();
+    const uploadData = await uploadToNasFileStation(nasUrl, sid, NAS_UPLOAD_PATH, finalFileName, blob);
 
     if (!uploadData.success) {
       throw new Error(

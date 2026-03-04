@@ -4,6 +4,8 @@ import {
   isNasConfigured,
   nasLogin,
   nasLogout,
+  ensureNasFolder,
+  uploadToNasFileStation,
 } from '@/lib/nas-auth';
 
 export const maxDuration = 30;
@@ -87,73 +89,19 @@ export async function GET() {
     };
   }
 
-  // 4. API 정보 조회 (올바른 Upload 엔드포인트 확인)
-  let uploadPath = 'entry.cgi';
-  let uploadMaxVersion = 2;
+  // 4. 폴더 생성 + 업로드(쓰기) 테스트 - 공통 함수 사용
   try {
-    const infoParams = new URLSearchParams({
-      api: 'SYNO.API.Info',
-      version: '1',
-      method: 'query',
-      query: 'SYNO.FileStation.Upload',
-    });
-    const infoRes = await fetch(`${nasUrl}/webapi/query.cgi?${infoParams}`);
-    const infoData = await infoRes.json();
-    if (infoData.success && infoData.data?.['SYNO.FileStation.Upload']) {
-      const uploadInfo = infoData.data['SYNO.FileStation.Upload'];
-      uploadPath = uploadInfo.path || 'entry.cgi';
-      uploadMaxVersion = uploadInfo.maxVersion || 2;
-    }
-    status.apiInfo = {
-      uploadPath,
-      uploadMaxVersion,
-      raw: infoData.data?.['SYNO.FileStation.Upload'] || null,
-    };
-  } catch (error) {
-    status.apiInfo = { error: error instanceof Error ? error.message : String(error) };
-  }
+    await ensureNasFolder(nasUrl, sid, NAS_UPLOAD_PATH);
 
-  // 5. 업로드(쓰기) 테스트 - API가 알려준 정확한 경로 사용
-  try {
     const testContent = JSON.stringify({ test: true, timestamp: new Date().toISOString() });
     const blob = new Blob([testContent], { type: 'application/json' });
 
-    const uploadForm = new FormData();
-    uploadForm.append('api', 'SYNO.FileStation.Upload');
-    uploadForm.append('version', String(Math.min(uploadMaxVersion, 2)));
-    uploadForm.append('method', 'upload');
-    uploadForm.append('path', NAS_UPLOAD_PATH);
-    uploadForm.append('create_parents', 'true');
-    uploadForm.append('overwrite', 'true');
-    uploadForm.append('_sid', sid);
-    uploadForm.append('file', blob, '_sync_test.json');
+    const uploadData = await uploadToNasFileStation(nasUrl, sid, NAS_UPLOAD_PATH, '_sync_test.json', blob);
 
-    // API Info 경로 + URL path에 API 이름 포함 + 쿼리/FormData/Cookie 모두 전달
-    const ver = String(Math.min(uploadMaxVersion, 2));
-    const uploadUrl = `${nasUrl}/webapi/${uploadPath}/SYNO.FileStation.Upload?api=SYNO.FileStation.Upload&version=${ver}&method=upload&_sid=${sid}`;
-    const uploadRes = await fetch(uploadUrl, {
-      method: 'POST',
-      body: uploadForm,
-      headers: { Cookie: `id=${sid}` },
-    });
-
-    const uploadText = await uploadRes.text();
-    try {
-      const uploadData = JSON.parse(uploadText);
-      status.uploadTest = {
-        success: uploadData.success,
-        error: uploadData.error || null,
-        httpStatus: uploadRes.status,
-        urlUsed: uploadUrl.replace(sid, 'SID_HIDDEN'),
-      };
-    } catch {
-      status.uploadTest = {
-        success: false,
-        httpStatus: uploadRes.status,
-        rawResponse: uploadText.substring(0, 500),
-        urlUsed: uploadUrl.replace(sid, 'SID_HIDDEN'),
-      };
-    }
+    status.uploadTest = {
+      success: uploadData.success,
+      error: uploadData.error || null,
+    };
   } catch (error) {
     status.uploadTest = {
       success: false,

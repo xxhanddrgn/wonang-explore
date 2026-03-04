@@ -125,7 +125,8 @@ export async function nasLogin(otpCode?: string): Promise<{ sid: string; nasUrl:
   }
 
   const searchParams = new URLSearchParams(params);
-  const res = await fetch(`${nasUrl}/webapi/auth.cgi?${searchParams}`);
+  // DSM 7: entry.cgi 사용 (auth.cgi 세션이 entry.cgi에서 인식 안 되는 문제 해결)
+  const res = await fetch(`${nasUrl}/webapi/entry.cgi?${searchParams}`);
   const data = await res.json();
 
   if (!data.success) {
@@ -168,7 +169,8 @@ export async function nasLoginWithOtp(
     device_name: 'LectureNotesPlatform',
   });
 
-  const res = await fetch(`${nasUrl}/webapi/auth.cgi?${params}`);
+  // DSM 7: entry.cgi 사용
+  const res = await fetch(`${nasUrl}/webapi/entry.cgi?${params}`);
   const data = await res.json();
 
   if (!data.success) {
@@ -186,6 +188,65 @@ export async function nasLoginWithOtp(
   };
 }
 
+/**
+ * NAS 폴더 생성 (없으면 생성, 있으면 무시)
+ */
+export async function ensureNasFolder(nasUrl: string, sid: string, folderPath: string): Promise<void> {
+  const parentPath = folderPath.substring(0, folderPath.lastIndexOf('/'));
+  const folderName = folderPath.substring(folderPath.lastIndexOf('/') + 1);
+
+  if (!parentPath || !folderName) return;
+
+  const params = new URLSearchParams({
+    api: 'SYNO.FileStation.CreateFolder',
+    version: '2',
+    method: 'create',
+    folder_path: `["${parentPath}"]`,
+    name: `["${folderName}"]`,
+    force_parent: 'true',
+    _sid: sid,
+  });
+
+  await fetch(`${nasUrl}/webapi/entry.cgi?${params}`).catch(() => {});
+}
+
+/**
+ * NAS에 파일 업로드하는 공통 함수
+ */
+export async function uploadToNasFileStation(
+  nasUrl: string,
+  sid: string,
+  uploadPath: string,
+  fileName: string,
+  fileBlob: Blob,
+): Promise<{ success: boolean; error?: { code: number } }> {
+  const uploadForm = new FormData();
+  uploadForm.append('api', 'SYNO.FileStation.Upload');
+  uploadForm.append('version', '2');
+  uploadForm.append('method', 'upload');
+  uploadForm.append('path', uploadPath);
+  uploadForm.append('create_parents', 'true');
+  uploadForm.append('overwrite', 'true');
+  uploadForm.append('_sid', sid);
+  uploadForm.append('file', fileBlob, fileName);
+
+  const uploadRes = await fetch(
+    `${nasUrl}/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=${sid}`,
+    {
+      method: 'POST',
+      body: uploadForm,
+      headers: { Cookie: `id=${sid}` },
+    }
+  );
+
+  const text = await uploadRes.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`NAS 업로드 응답 파싱 실패: ${text.substring(0, 200)}`);
+  }
+}
+
 export async function nasLogout(sid: string, nasUrl?: string): Promise<void> {
   const url = nasUrl || await getActiveNasUrl();
 
@@ -197,5 +258,6 @@ export async function nasLogout(sid: string, nasUrl?: string): Promise<void> {
     _sid: sid,
   });
 
-  await fetch(`${url}/webapi/auth.cgi?${params}`).catch(() => {});
+  // DSM 7: entry.cgi 사용
+  await fetch(`${url}/webapi/entry.cgi?${params}`).catch(() => {});
 }
