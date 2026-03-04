@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isNasConfigured, nasLogin, nasLogout } from '@/lib/nas-auth';
+import { isNasConfigured, nasLogin, nasLogout, getDeviceTokenFromCookies } from '@/lib/nas-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +25,8 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const login = await nasLogin();
+    const cookieToken = getDeviceTokenFromCookies(req.headers.get('cookie'));
+    const login = await nasLogin(undefined, cookieToken);
     sid = login.sid;
     nasUrl = login.nasUrl;
 

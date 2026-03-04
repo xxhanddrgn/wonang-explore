@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import {
   NAS_UPLOAD_PATH,
   isNasConfigured,
@@ -6,6 +6,7 @@ import {
   nasLogout,
   ensureNasFolder,
   uploadToNasFileStation,
+  getDeviceTokenFromCookies,
 } from '@/lib/nas-auth';
 
 export const maxDuration = 30;
@@ -14,7 +15,7 @@ export const maxDuration = 30;
  * GET: 동기화 상태 진단
  * 브라우저에서 /api/sync-status 접속하면 NAS 연결 + 데이터 상태 확인 가능
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   const status: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
     environment: process.env.VERCEL ? 'vercel' : 'local',
@@ -40,7 +41,8 @@ export async function GET() {
   let sid = '';
   let nasUrl = '';
   try {
-    const login = await nasLogin();
+    const cookieToken = getDeviceTokenFromCookies(req.headers.get('cookie'));
+    const login = await nasLogin(undefined, cookieToken);
     sid = login.sid;
     nasUrl = login.nasUrl;
     status.loginTest = { success: true, nasUrl };
